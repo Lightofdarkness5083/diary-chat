@@ -15,6 +15,7 @@ from settings import ROOT, PromptMissing, load_env
 load_env()
 
 from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
 import chat  # noqa: E402
@@ -35,6 +36,17 @@ async def check_passcode(request: Request, call_next):
         if not hmac.compare_digest(given.encode("utf-8"), passcode.encode("utf-8")):
             return JSONResponse({"error": "접속 암호가 맞지 않습니다."}, status_code=401)
     return await call_next(request)
+
+
+# 다른 주소의 화면(Vercel)이 이 서버를 부를 수 있게 하는 명단. 환경변수 ALLOWED_ORIGINS에 쉼표로 적는다.
+# 명단일 뿐 자물쇠가 아니다: 접속 암호와 로그인 확인은 그대로 한다.
+# 접속 암호 확인보다 뒤에 붙여야 바깥에서 먼저 받는다. 그래야 브라우저의 사전 문의(OPTIONS)에 답하고,
+# 암호가 틀렸다는 답(401)도 화면이 읽을 수 있다.
+ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if ALLOWED_ORIGINS:
+    app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
+                       allow_methods=["GET", "POST", "PUT", "DELETE"],
+                       allow_headers=["Authorization", "Content-Type", "X-Passcode"])
 
 
 @app.exception_handler(PromptMissing)

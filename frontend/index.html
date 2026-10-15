@@ -709,8 +709,14 @@ function loadScript(src) {
   });
 }
 
+/* 서버가 있는 곳. 화면을 서버와 같은 주소(Render, 내 컴퓨터)에서 열면 그대로 '/api/...'를 부르고,
+   다른 주소(Vercel)에서 열면 Render 서버의 주소를 앞에 붙인다. 서버 주소는 비밀이 아니다 */
+const SERVER_URL = 'https://diary-chat-nqch.onrender.com';
+const SAME_ORIGIN = location.hostname.endsWith('.onrender.com') || ['localhost', '127.0.0.1'].includes(location.hostname);
+const API = SAME_ORIGIN ? '' : SERVER_URL;
+
 const configReady = (async () => {
-  try { appConfig = await (await fetch('/api/config')).json(); } catch (e) { return; }
+  try { appConfig = await (await fetch(API + '/api/config')).json(); } catch (e) { return; }
   if (appConfig.login === 'google' && appConfig.firebase) {
     try {
       await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
@@ -972,7 +978,7 @@ async function request(path, options) {
     const timer = setTimeout(() => stop.abort(), REQUEST_LIMIT);
     try {
       const signed = account ? { Authorization: 'Bearer ' + await account.token() } : {};
-      response = await fetch(path, { ...options, signal: stop.signal,
+      response = await fetch(API + path, { ...options, signal: stop.signal,
                                      headers: { ...(options.headers || {}), ...passcodeHeader(), ...signed } });
     } catch (e) {
       clearTimeout(timer);
