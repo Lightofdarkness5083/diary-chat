@@ -91,6 +91,8 @@ flowchart LR
 
 화면(`frontend/`)은 [Vercel](https://vercel.com)에도 올린다. Vercel 프로젝트의 Root Directory를 `frontend`로 두면 빌드 없이 그대로 올라간다. Vercel에서 연 화면은 Render 서버를 부르므로, Render의 `ALLOWED_ORIGINS`에 Vercel 주소를 적고 Firebase 로그인 허용 도메인에도 더한다.
 
+iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막는다. 그래서 Vercel에서는 로그인 창도 앱과 같은 주소(`/__/auth/`)에서 열고, `frontend/vercel.json`이 그 요청을 Firebase로 넘겨준다. 이를 위해 Google Cloud 콘솔의 OAuth 클라이언트에 `https://<Vercel 주소>/__/auth/handler`를 승인된 리디렉션 URI로 더해 둔다.
+
 ## 일기장 (Firestore)
 
 - `diaries/{기록 번호}`: 묵상 한 편. 모든 문서가 같은 19개 항목을 가진다: 기록 17개(`diary/schema.py`) + `uid` + `deleted`.
