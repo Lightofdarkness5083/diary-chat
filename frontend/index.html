@@ -721,7 +721,10 @@ const configReady = (async () => {
     try {
       await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
       await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
-      firebase.initializeApp(appConfig.firebase);
+      // Vercel에서 열면 로그인 창도 같은 주소(/__/auth/)에서 연다. Safari는 다른 주소끼리 로그인 결과를
+      // 주고받는 것을 막기 때문이다. 그 주소는 vercel.json이 Firebase로 그대로 넘겨준다
+      const onVercel = location.hostname.endsWith('.vercel.app');
+      firebase.initializeApp(onVercel ? { ...appConfig.firebase, authDomain: location.host } : appConfig.firebase);
       firebaseAuth = firebase.auth();
       await new Promise(resolve => firebaseAuth.onAuthStateChanged(user => {     // 예전에 로그인했으면 바로 알아본다
         account = user ? { uid: user.uid, email: user.email || '', token: () => user.getIdToken() } : null;
