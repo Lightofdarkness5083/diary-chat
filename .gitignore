@@ -1,0 +1,16 @@
+.DS_Store
+
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# 일기장 도구가 내려받은 사본과 서버용 열쇠. 묵상의 글과 비밀이 들어 있어 Git에 올리지 않는다
+backup/
+*service-account*.json
+*firebase-adminsdk*.json
+
+# AI 지시문은 저장소에 두지 않는다 (prompts/README.md 참고)
+prompts/*
+!prompts/README.md

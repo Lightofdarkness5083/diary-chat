@@ -1,0 +1,66 @@
+"""앱의 출입구.  내 컴퓨터에서: sh run.sh   인터넷에 올릴 때: uvicorn dev_main:app --host 0.0.0.0 --port $PORT
+
+묵상 부분(meditation)과 일기 비서(chat)를 연결하고, 화면(frontend/index.html)을 내어 준다.
+
+접속 암호: 환경변수 APP_PASSCODE를 정해 두면, 그 암호를 아는 사람만 묵상할 수 있다.
+인터넷에 올리면 주소를 아는 누구나 들어올 수 있고, 묵상할 때마다 API 요금이 나가기 때문이다.
+내 컴퓨터에서 쓸 때는 정하지 않아도 된다.
+"""
+import hmac
+import os
+from urllib.parse import unquote
+
+from settings import ROOT, PromptMissing, load_env
+
+load_env()
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+
+import chat  # noqa: E402
+import diary  # noqa: E402
+import meditation  # noqa: E402
+
+app = FastAPI(title="Diary with Jesus")
+app.include_router(meditation.router)   # 7단계 묵상 인도
+app.include_router(chat.router)         # 묵상 일기 비서
+app.include_router(diary.router)        # 일기장: 묵상 기록을 사용자별로 저장
+
+
+@app.middleware("http")
+async def check_passcode(request: Request, call_next):
+    passcode = os.environ.get("APP_PASSCODE", "")
+    if passcode and request.url.path.startswith("/api/") and request.url.path != "/api/config":
+        given = unquote(request.headers.get("x-passcode", ""))
+        if not hmac.compare_digest(given.encode("utf-8"), passcode.encode("utf-8")):
+            return JSONResponse({"error": "접속 암호가 맞지 않습니다."}, status_code=401)
+    return await call_next(request)
+
+
+@app.exception_handler(PromptMissing)
+async def prompt_missing(request: Request, problem: PromptMissing):
+    # 지시문 파일을 금고(Render Secret Files)에 올리지 않았을 때. 무엇이 빠졌는지 분명히 알린다
+    return JSONResponse({"error": str(problem)}, status_code=503)
+
+
+@app.get("/")
+def index():
+    # 휴대폰이 옛 화면을 붙들고 있지 않도록, 열 때마다 새 화면인지 서버에 묻게 한다
+    return FileResponse(ROOT / "frontend" / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+# 홈 화면에 추가할 때 쓰는 앱 정보와 아이콘 (암호 없이 열린다: 묵상 내용이 없다)
+APP_FILES = {
+    "manifest.webmanifest": "application/manifest+json",
+    "apple-touch-icon.png": "image/png",
+    "icon-192.png": "image/png",
+    "icon-512.png": "image/png",
+    "icon-maskable-512.png": "image/png",
+}
+
+
+@app.get("/{name}")
+def app_file(name: str):
+    if name not in APP_FILES:
+        return JSONResponse({"error": "없는 주소입니다."}, status_code=404)
+    return FileResponse(ROOT / "frontend" / name, media_type=APP_FILES[name])

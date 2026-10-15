@@ -1,0 +1,2481 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diary with Jesus</title>
+<!-- 홈 화면에 추가하면 주소창 없이 앱처럼 열린다 -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Diary with Jesus">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F6F8F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12171C" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    --paper: #F6F8F4;
+    --ink: #1C2630;
+    --pen: #27498A;      /* 묵상자가 쓴 글의 잉크 */
+    --sage: #E6EDE2;     /* 성경 본문의 바탕 */
+    --moss: #56724A;     /* 절 번호 */
+    --muted: #68727C;
+    --line: #D6DCD3;
+    --on-pen: #FFFFFF;
+    --sheet: #FFFFFF;    /* 묵상 기록의 종이 */
+    --sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    --serif: "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
+    --composer-height: 5rem;
+    --cloth: #24427C;        /* 표지의 천 */
+    --cloth-ink: #F2F4EE;    /* 표지에 찍힌 글자 */
+    --cloth-line: rgba(242, 244, 238, 0.34);
+    --ribbon: #A8C39A;       /* 가름끈, 그리고 묵상한 날의 잎 */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12171C; --ink: #E4E8EA; --pen: #9DB9F0; --sage: #1B2520;
+      --moss: #9DB98F; --muted: #8D979F; --line: #2A3238; --on-pen: #12171C;
+      --sheet: #1A2027;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 1.0625rem; line-height: 1.75;
+    word-break: keep-all; overflow-wrap: anywhere;
+  }
+  main {
+    max-width: 36rem; margin: 0 auto;
+    padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.25rem
+             calc(var(--composer-height) + var(--keyboard, 0px) + 2rem);
+  }
+
+  header { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line);
+           display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; }
+  header button.link { margin: 0; white-space: nowrap; }
+  section[hidden] { display: none; }
+  .hint { color: var(--muted); font-size: 0.875rem; line-height: 1.6; }
+  .question { font-weight: 700; }
+
+  /* ---- 표지: 앱을 열면 일기장이 놓여 있고, 누르면 펼쳐진다 ---- */
+  #cover { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; align-content: center; padding: 1.5rem;
+           background: var(--paper); perspective: 1500px; overflow: hidden;
+           transition: opacity 0.35s, visibility 0s; }                     /* 덮을 때 */
+  #cover.open { opacity: 0; visibility: hidden; pointer-events: none;
+                transition: opacity 0.4s 1.3s, visibility 0s 1.7s; }      /* 펼칠 때: 안으로 다 들어간 뒤에 걷힌다 */
+  /* 펼치면 표지가 왼쪽으로 젖혀지고, 속지가 다가와 화면을 채운다 */
+  .book { position: relative; width: min(74vw, 19rem); aspect-ratio: 3 / 4.15; transform-style: preserve-3d;
+          transition: transform 1.35s cubic-bezier(0.55, 0, 0.2, 1); }
+  #cover.open .book { transform: translateX(8%) scale(5); transition-delay: 0.3s; }    /* 표지가 먼저 젖혀지고, 이어서 안으로 들어간다 */
+  .book .leaf-page, .book .board { position: absolute; inset: 0; border-radius: 3px 9px 9px 3px; }
+  .book .leaf-page { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); transform: translateX(5px); }
+  .book .board {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;
+    width: 100%; margin: 0; padding: 0 1.25rem 0 2.1rem; border: 0; cursor: pointer; white-space: normal;
+    color: var(--cloth-ink); font-family: var(--serif); font-weight: 400; text-align: center;
+    background-color: var(--cloth);
+    background-image:
+      linear-gradient(90deg, rgba(0,0,0,0.34) 0, rgba(0,0,0,0.1) 0.95rem, rgba(255,255,255,0.1) 1.05rem, transparent 1.3rem),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 3px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 18px 34px -14px rgba(18, 32, 62, 0.55), 0 3px 8px rgba(18, 32, 62, 0.2);
+    transform-origin: left center; transition: transform 1.1s cubic-bezier(0.5, 0, 0.25, 1);
+  }
+  #cover.open .board { transform: rotateY(-168deg); }
+  .book .board > *, .book .ribbon { transition: opacity 0.3s; }
+  #cover.open .board > *, #cover.open .ribbon { opacity: 0; }        /* 젖혀진 표지의 안쪽에는 글자가 없다 */
+  #cover-note { min-height: 3.2rem; margin: 4.2rem 0 0; text-align: center; font-family: var(--serif); font-size: 1.0625rem; color: var(--ink); transition: opacity 0.3s; }
+  #cover.open #cover-note { opacity: 0; }
+  .book .board::before { content: ""; position: absolute; inset: 0.85rem 0.85rem 0.85rem 1.75rem;
+                         border: 1px solid var(--cloth-line); border-radius: 2px 6px 6px 2px; pointer-events: none; }
+  .book .title { font-size: 1.7rem; line-height: 1.25; letter-spacing: 0.01em; }
+  .book .title small { display: block; margin-top: 0.5rem; font-size: 0.875rem; letter-spacing: 0.2em; opacity: 0.8; }
+  .book .mark { width: 1.6rem; height: 1.6rem; color: var(--ribbon); }
+  .book .open-hint { position: absolute; bottom: 1.7rem; left: 1.75rem; right: 0.85rem; font-family: var(--sans); font-size: 0.8125rem; opacity: 0.72; }
+  .book .ribbon { position: absolute; z-index: 1; top: 99%; right: 21%; width: 0.72rem; height: 3.1rem; background: var(--ribbon);
+                  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%); }
+  .book .board:focus-visible { outline: 3px solid var(--ribbon); outline-offset: 4px; }
+  /* 뒷면: 책을 덮으면 한 바퀴 돌아 뒷면이 보인다. 누르면 다시 돌아 앞표지로 펼쳐진다 */
+  #cover.back .book { transform: rotateY(180deg); transition: transform 1s cubic-bezier(0.5, 0, 0.25, 1); }
+  #cover.still, #cover.still .book, #cover.still .board, #cover.still .board > *, #cover.still .ribbon { transition: none !important; }
+  #cover.still { animation: settle 0.5s ease-out; }       /* 겉 전체가 스며든다 (책에 투명도를 주면 뒷면이 비친다) */
+  @keyframes settle { from { opacity: 0; } to { opacity: 1; } }
+  #cover-account { width: min(86vw, 22rem); margin-top: 0.5rem; }
+  #cover:not(.back) #cover-account { display: none; }
+  #cover-account .account { margin: 0; }
+  #cover-account .confirm-box { margin: 0; font-size: 0.9375rem; }
+  #cover-account .confirm-box .title { margin: 0 0 0.4rem; font-weight: 700; }
+  #cover-account .confirm-box ul { margin: 0 0 0.9rem; padding-left: 1.1rem; color: var(--muted); line-height: 1.6; }
+  #cover-account .confirm-box li { margin-bottom: 0.3rem; }
+  /* 로그아웃을 묻는 동안은 책을 작게 두어 한 화면에 들어오게 한다 */
+  #cover.asking .book { zoom: 0.55; }
+  #cover.asking #cover-note { min-height: 0; margin-top: 2.6rem; }
+  .book .back-board {
+    position: absolute; inset: 0; border-radius: 9px 3px 3px 9px; transform: translateZ(-2px) rotateY(180deg);
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6rem;
+    width: 100%; margin: 0; padding: 0 2.1rem 0 1.25rem; border: 0; cursor: pointer; white-space: normal;
+    color: var(--cloth-ink); font-family: var(--serif); font-weight: 400; text-align: center;
+    background-color: var(--cloth);
+    background-image:
+      linear-gradient(270deg, rgba(0,0,0,0.34) 0, rgba(0,0,0,0.1) 0.95rem, rgba(255,255,255,0.1) 1.05rem, transparent 1.3rem),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 3px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 18px 34px -14px rgba(18, 32, 62, 0.55), 0 3px 8px rgba(18, 32, 62, 0.2);
+  }
+  .book .back-board::before { content: ""; position: absolute; inset: 0.85rem 1.75rem 0.85rem 0.85rem;
+                              border: 1px solid var(--cloth-line); border-radius: 6px 2px 2px 6px; pointer-events: none; }
+  .book .back-board .verse { font-size: 1.1875rem; line-height: 1.85; letter-spacing: 0.02em; }
+  .book .back-board .ref { font-family: var(--sans); font-size: 0.8125rem; letter-spacing: 0.08em; opacity: 0.75; }
+  .book .back-board .mark { margin-top: 1rem; }
+  .book .back-board .open-hint { left: 0.85rem; right: 1.75rem; }
+  .book .back-board:focus-visible { outline: 3px solid var(--ribbon); outline-offset: 4px; }
+
+  /* 페이지 넘김: 화면이 바뀔 때 한 장이 넘어온다 */
+  main.turning { animation: turn-page 0.5s cubic-bezier(0.3, 0.6, 0.3, 1); transform-origin: left center; }
+  @keyframes turn-page { from { opacity: 0; transform: perspective(1400px) rotateY(-14deg) translateX(0.75rem); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    main.turning { animation: none; }
+    .book, .book .board, .book .board > *, .book .ribbon, #cover-note, #cover.back .book { transition: none; }
+    #cover, #cover.open { transition: none; }
+  }
+
+  /* ---- 안내 ---- */
+  #login h2 { margin: 2rem 0 0.5rem; font-family: var(--serif); font-size: 1.6rem; }
+  #login .lead { margin: 0 0 1.5rem; }
+  #login .hint { margin-top: 1.25rem; }
+  .move-box { margin: 0 0 1.5rem; padding: 1rem 1.1rem; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+  .move-box p { margin: 0 0 0.7rem; }
+  .move-box ul { margin: 0 0 0.7rem; padding-left: 1.1rem; color: var(--muted); font-size: 0.9375rem; }
+  .account { margin: 0 0 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem; }
+  .account button.link { display: inline; width: auto; margin: 0 0 0 0.5rem; padding: 0; font-size: 0.8125rem; }
+  .guide-page h2 { margin: 0 0 0.9rem; font-family: var(--serif); font-size: 1.5rem; line-height: 1.4; }
+  .guide-page .preface { margin: 0 0 1.75rem; font-family: var(--serif); font-size: 1.0625rem; line-height: 1.9; }
+  .guide-page .preface p { margin: 0 0 0.8rem; }
+  .guide-page ol { list-style: none; margin: 0 0 1.5rem; padding: 0; counter-reset: step; border-top: 1px solid var(--line); }
+  .guide-page li { counter-increment: step; display: grid; grid-template-columns: 1.6rem 1fr; column-gap: 0.6rem;
+              padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
+  .guide-page li::before { content: counter(step); font-family: var(--serif); font-size: 1.125rem; color: var(--moss); line-height: 1.6; }
+  .guide-page li strong { display: block; font-family: var(--serif); font-size: 1.0625rem; }
+  .guide-page li span { color: var(--muted); font-size: 0.9375rem; line-height: 1.6; }
+  .guide-page .notes { margin: 0 0 1.75rem; padding: 0 0 0 1rem; border-left: 3px solid var(--ribbon); }
+  .guide-page .notes p { margin: 0 0 0.4rem; }
+  .guide-page .buttons { align-items: center; }
+
+  /* ---- 묵상 | 돌아보기 두 칸 ---- */
+  .tabs { display: flex; gap: 1.75rem; margin: -0.75rem 0 1.5rem; border-bottom: 1px solid var(--line); }
+  .tabs[hidden] { display: none; }
+  .tabs button { margin: 0 0 -1px; padding: 0.5rem 0.1rem; background: none; border-radius: 0; color: var(--muted);
+                 font-family: var(--serif); font-size: 1.0625rem; font-weight: 400; border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--pen); }
+
+  /* ---- 돌아보기: 물음 하나에 한 쪽 ---- */
+  .page-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .page-bar[hidden] { display: none; }
+  .page-bar button { padding: 0.3rem 0.9rem; font-size: 1.25rem; line-height: 1.2; }
+  .page-bar button:disabled { visibility: hidden; }
+  .page-bar .count { color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+  #review-page { min-height: 40vh; touch-action: pan-y; }
+  .page-bar .back { margin: 0 auto 0 0; padding: 0.2rem 0; font-size: 0.9375rem; text-decoration: none; }
+  .page-bar .turn { display: flex; align-items: center; gap: 0.5rem; }
+  .contents h2, .examples-title { margin: 0 0 0.5rem; color: var(--moss); font-size: 0.9375rem; font-weight: 700; }
+  .contents ol { list-style: none; margin: 0 0 1.75rem; padding: 0; counter-reset: q; border-top: 1px solid var(--line); }
+  .contents li { counter-increment: q; border-bottom: 1px solid var(--line); }
+  .contents li button { display: grid; grid-template-columns: 1.6rem 1fr auto; column-gap: 0.5rem; align-items: baseline; width: 100%;
+                        padding: 0.75rem 0; background: none; border-radius: 0; color: var(--ink); font-weight: 400; text-align: left; white-space: normal; }
+  .contents li button::before { content: counter(q); font-family: var(--serif); color: var(--moss); }
+  .contents li .q { font-family: var(--serif); line-height: 1.6; }
+  .contents li .d { color: var(--muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .contents li .d.waiting-note { color: var(--pen); }
+  .latest { margin: 0 0 1.5rem; padding: 1.1rem 1.2rem; background: var(--sheet); border: 1px solid var(--line);
+            border-top: 4px solid var(--pen); border-radius: 4px; }
+  .latest .eyebrow { margin: 0; color: var(--moss); font-size: 0.875rem; font-weight: 700; }
+  .latest h3 { margin: 0.2rem 0 0.1rem; font-family: var(--serif); font-size: 1.5rem; }
+  .latest .span { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.875rem; }
+  .confirm-box { margin: 0 0 1.5rem; padding: 1rem 1.1rem; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+  .confirm-box p { margin: 0 0 0.8rem; }
+  .confirm-box .buttons { align-items: center; }
+  .confirm-box button.link { display: inline; margin: 0; }
+  #review-page .question { margin: 0 0 1rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--line);
+                           color: var(--pen); font-family: var(--serif); font-size: 1.1875rem; line-height: 1.7; }
+  #review-page .asked { margin: -0.6rem 0 1rem; color: var(--muted); font-size: 0.8125rem; }
+  .review-lead { margin: 0 0 1.25rem; font-family: var(--serif); font-size: 1.0625rem; line-height: 1.85; }
+  .examples { display: flex; flex-direction: column; gap: 0.55rem; margin: 0 0 1.75rem; }
+  .examples button { text-align: left; white-space: normal; font-weight: 400; background: var(--sheet); color: var(--ink);
+                     border: 1px solid var(--line); border-radius: 999px; padding: 0.6rem 1rem; }
+  .examples button.view { color: var(--pen); }
+  #ask-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 1px solid var(--line);
+    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  #ask-bar[hidden] { display: none; }
+  #ask-bar .row { max-width: 36rem; margin: 0 auto; }
+
+  /* ---- 본문 적는 쪽 ---- */
+  #entry h2 { margin: 0 0 0.4rem; font-family: var(--serif); font-size: 1.5rem; }
+  #entry .lead { margin: 0 0 1.25rem; color: var(--muted); }
+
+  /* 달력 */
+  .month-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .month-bar h2 { margin: 0; font-family: var(--serif); font-size: 1.375rem; }
+  .month-bar button { padding: 0.3rem 0.9rem; font-size: 1.25rem; line-height: 1.2; }
+  .weekdays, .calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .weekdays span { text-align: center; color: var(--muted); font-size: 0.8125rem; padding-bottom: 0.25rem; }
+  .calendar { margin-bottom: 1.25rem; }
+  .day {
+    position: relative; aspect-ratio: 1 / 1.12; padding: 0.3rem 0 0; border: 0; border-radius: 50% 50% 46% 46%;
+    background: transparent; color: var(--ink); font-weight: 400; text-align: center; white-space: normal;
+    display: flex; flex-direction: column; align-items: center; gap: 0.05rem;
+  }
+  .day:disabled { opacity: 1; color: var(--muted); }
+  .day .number { font-size: 0.9375rem; font-variant-numeric: tabular-nums; line-height: 1.5; }
+  .day .leaf { width: 1.15rem; height: 1.15rem; color: var(--moss); }
+  .day .leaf.paused { color: var(--pen); }
+  .day.today .number { width: 1.75rem; border-radius: 50%; background: var(--pen); color: var(--on-pen); font-weight: 700; }
+  .day.blank { visibility: hidden; }
+  #composer .tools { max-width: 36rem; margin: 0 auto 0.45rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  #composer .tools button.link { margin: 0; padding: 0.15rem 0; }
+  #passage-panel { max-width: 36rem; margin: 0 auto 0.5rem; max-height: 40vh; overflow-y: auto; }
+  #passage-panel .passage { margin: 0; }
+  .waiting .slow { display: block; margin-top: 0.4rem; letter-spacing: 0; font-size: 0.875rem; }
+  .pause { margin: 1.5rem 0; text-align: center; color: var(--muted); font-size: 0.8125rem; display: flex; align-items: center; gap: 0.75rem; }
+  .pause::before, .pause::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .home-status { margin: 0.5rem 0 0.75rem; min-height: 1.75rem; text-align: center; font-family: var(--serif); font-size: 1.0625rem; }
+  .home-status.notice-line { color: var(--pen); }
+  .home-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1.25rem; margin-bottom: 1.5rem; }
+  .home-links button.link { margin: 0; }
+  .home-note { margin: -0.5rem 0 1rem; text-align: center; color: var(--muted); font-size: 0.875rem; }
+  .home-note:empty { display: none; }
+  .home-action { display: flex; justify-content: center; margin: 0 0 1.25rem; }
+  .home-action:empty { display: none; }
+  #home-extra .confirm-box { margin: 0 0 1rem; }
+  .calendar { row-gap: 0.35rem; }
+  .passage-form .row { display: flex; gap: 0.5rem; }
+  .passage-form input { flex: 1; min-width: 0; padding: 0.7rem 0.85rem; font: inherit; color: inherit;
+                        background: transparent; border: 1px solid var(--line); border-radius: 8px; }
+  .passage-form input::placeholder { font-size: 0.9375rem; }
+  .passage-form .example { margin: 0.6rem 0 0; }
+  .passage-form .example strong { color: var(--ink); font-weight: 600; }
+
+  /* 책과 단락 펼치기 */
+  #entry-browse { margin-top: 1.5rem; }
+  .browse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 0 0 0.75rem; }
+  .browse-head h3 { margin: 0; font-family: var(--serif); font-size: 1.25rem; font-weight: 500; }
+  .browse-head button.link { margin: 0; width: auto; }
+  .testament { margin: 1.25rem 0 0.5rem; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.05em; }
+  .books { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.4rem; }
+  .books button { display: flex; align-items: center; justify-content: center; gap: 0.3rem; margin: 0; padding: 0.55rem 0.4rem;
+                  font: inherit; font-size: 0.9375rem; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .books button.ready { border-color: var(--pen); }
+  .books button .leaf { width: 0.9rem; height: 0.9rem; color: var(--moss); }
+  .paragraphs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+                max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; position: relative; }
+  .paragraphs li:last-child { border-bottom: 0; }
+  .paragraphs li { border-bottom: 1px solid var(--line); }
+  .paragraphs button { display: flex; align-items: center; gap: 0.75rem; width: 100%; margin: 0; padding: 0.8rem 0.25rem;
+                       font: inherit; color: var(--ink); text-align: left; background: transparent; border: 0; cursor: pointer; }
+  .paragraphs .ref { min-width: 5.5rem; font-variant-numeric: tabular-nums; }
+  .paragraphs .done { display: flex; align-items: center; gap: 0.35rem; min-width: 0; color: var(--muted); font-size: 0.8125rem; }
+  .paragraphs .done .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .paragraphs .done .leaf { width: 0.9rem; height: 0.9rem; color: var(--moss); }
+  .paragraphs .count { margin-left: auto; color: var(--muted); font-size: 0.8125rem; }
+  .paragraphs .count + .next { margin-left: 0.6rem; }
+  .long-read { margin: 0.5rem 0 1rem; padding: 0.9rem 1rem; background: var(--sage); border-radius: 6px;
+               font-family: var(--serif); font-size: 1.0625rem; line-height: 1.85; }
+  .long-read p { margin: 0 0 0.35rem; }
+  .long-read .num { color: var(--muted); font-family: var(--sans); font-size: 0.75rem; }
+  #entry-browse > button:not(.link) { width: 100%; }
+  .paragraphs .next { margin-left: auto; color: var(--pen); font-size: 0.8125rem; font-weight: 600; }
+  .paragraphs li.is-next button { font-weight: 600; }
+  .paragraphs li.chosen button { background: var(--sage); }
+
+  /* 기록 보기: 찾기, 책별 정리, 한 해 돌아보기 */
+  .embed { margin: 0.25rem 0 1.25rem; padding: 1rem 1rem 0.75rem; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+  .embed .view-title { font-size: 1.125rem; margin-bottom: 0.5rem; }
+  .embed .month-bar { margin-bottom: 0.25rem; }
+  .embed .row-item:last-child, .embed .truth-item:last-of-type { border-bottom: 0; }
+  #ask-form { position: sticky; bottom: 0; padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: var(--paper); }
+  #talk { min-height: 40vh; }
+  .finished-book { margin: 0.5rem 0 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+  .finished-book .question { margin: 0 0 0.6rem; }
+  #search-box { width: 100%; padding: 0.7rem 0.85rem; font: inherit; color: inherit; background: transparent;
+                border: 1px solid var(--line); border-radius: 8px; }
+  .row-item { display: grid; grid-template-columns: auto 1fr; column-gap: 0.75rem; row-gap: 0.15rem; width: 100%; margin: 0;
+              padding: 0.8rem 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+              background: transparent; color: var(--ink); font-weight: 400; text-align: left; white-space: normal; }
+  .row-item .when { color: var(--muted); font-size: 0.8125rem; align-self: center; }
+  .row-item .what { font-family: var(--serif); font-weight: 700; }
+  .row-item .detail { grid-column: 1 / -1; color: var(--muted); font-size: 0.875rem; line-height: 1.6; }
+  .truth-item { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
+  .truth-item .head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; width: 100%; padding: 0;
+                      background: transparent; color: var(--ink); text-align: left; }
+  .truth-item .head .what { font-family: var(--serif); font-size: 1.125rem; }
+  .truth-item .head .when { color: var(--muted); font-size: 0.8125rem; font-weight: 400; }
+  .truth-item .title { margin: 0.1rem 0 0.5rem; color: var(--moss); font-size: 0.875rem; font-weight: 600; }
+  .truth-item .body { font-size: 1.125rem; line-height: 1.8; }
+  .truth-item .body p { margin: 0; }
+  .truth-item .body ol, .truth-item .body ul { margin: 0; padding-left: 1.3rem; }
+  .truth-item .own { color: var(--pen); font-family: var(--serif); }
+  .truth-item .applied { margin: 0.6rem 0 0; padding-left: 0.75rem; border-left: 2px solid var(--pen); color: var(--pen); font-family: var(--serif); }
+  .truth-item .application { margin: 0.6rem 0 0; }
+  .truth-item .application .label { display: block; color: var(--moss); font-size: 0.8125rem; font-weight: 700; }
+  .truth-item .application .body { font-size: 1rem; line-height: 1.75; }
+  .span-chart { margin: 0.5rem 0 0.75rem; }
+  .month-bar h2.span-title { font-size: 1.0625rem; text-align: center; }
+  .span-row { display: grid; grid-template-columns: 6.75rem 1fr; align-items: center; min-height: 2rem; border-bottom: 1px solid var(--line); }
+  .span-row.span-months { min-height: 1.5rem; border-bottom: 0; }
+  .span-book { font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.5rem; }
+  .span-track { position: relative; height: 2rem; }
+  .span-months .span-track { height: 1.5rem; }
+  .span-month { position: absolute; bottom: 0.15rem; color: var(--muted); font-size: 0.6875rem; white-space: nowrap; transform: translateX(-50%); }
+  .span-month.new-year { color: var(--ink); font-weight: 700; }
+  .span-grid.new-year { background: var(--muted); }
+  .span-grid { position: absolute; top: 0.35rem; bottom: 0.35rem; width: 1px; background: var(--line); }
+  .span-dot { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; padding: 0; border: 0; border-radius: 50%;
+              background: var(--moss); cursor: pointer; }
+  .span-dot::after { content: ""; position: absolute; inset: -9px; }          /* 누르기 쉽게 */
+  .span-dot:hover, .span-dot:focus-visible { outline: 2px solid var(--pen); outline-offset: 1px; }
+  .truth-item .applied .label { display: block; color: var(--moss); font-family: var(--sans); font-size: 0.8125rem; font-weight: 700; }
+  #books .buttons { margin-top: 1.25rem; }
+  .stats { margin: 0 0 1rem; color: var(--muted); }
+  .stats strong { color: var(--ink); font-size: 1.125rem; }
+  .heat { display: grid; grid-template-columns: 2.1rem repeat(31, minmax(0, 1fr)); gap: 2px; align-items: center; }
+  .heat .month { color: var(--muted); font-size: 0.6875rem; }
+  .cell { display: inline-block; aspect-ratio: 1; min-width: 6px; border-radius: 2px; background: var(--line); }
+  .cell.on { background: var(--pen); }
+  .cell.none { visibility: hidden; }
+  .cell.now { outline: 1.5px solid var(--ink); outline-offset: 1px; }
+  .legend { margin: 0.6rem 0 1.25rem; }
+  .legend .cell { width: 0.7rem; vertical-align: -1px; }
+  .month-head { margin: 1.25rem 0 0; font-family: var(--serif); font-size: 1.125rem; }
+
+  /* 본문 정하기 */
+  .view-title { margin: 0 0 1rem; font-family: var(--serif); font-size: 1.375rem; }
+  .pick { display: block; width: 100%; margin: 0 0 4px; padding: 0.6rem 0.7rem; border: 1px solid transparent; border-radius: 6px;
+          background: transparent; color: var(--ink); font-weight: 400; text-align: left; white-space: normal; }
+  .pick .number { display: inline-block; min-width: 2.6rem; color: var(--moss); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .pick .text { font-family: var(--serif); line-height: 1.8; }
+  .pick.chosen { background: var(--sage); }
+  .pick.last { border-color: var(--pen); }
+  .pick:disabled { opacity: 0.35; }
+  .sticky-action { position: sticky; bottom: 0.75rem; margin-top: 0.75rem; }
+  .sticky-action button { width: 100%; box-shadow: 0 4px 16px rgba(28, 38, 48, 0.18); }
+  select { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.7rem; }
+
+  header h1 { margin: 0; font-family: var(--serif); font-size: 1.375rem; font-weight: 700; line-height: 1.3; }
+  header time { color: var(--muted); font-size: 0.875rem; }
+
+  /* 본문 정하기 */
+  #start label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+  #start .row { display: flex; gap: 0.5rem; }
+  #start input {
+    flex: 1; min-width: 0; padding: 0.7rem 0.85rem; font: inherit; color: inherit;
+    background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  }
+  #start .hint { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.875rem; }
+  .notice { margin: 0.75rem 0 0; color: var(--pen); font-size: 0.9375rem; }
+  .notice:empty { display: none; }
+
+  button {
+    font: inherit; font-weight: 600; padding: 0.7rem 1rem; border: 0; border-radius: 8px;
+    background: var(--pen); color: var(--on-pen); cursor: pointer; white-space: nowrap;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  :focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+
+  /* 하나로 이어지는 묵상 */
+  #thread > * { scroll-margin-top: 1rem; }
+  .guide p { margin: 0 0 0.9rem; }
+  .guide ol, .guide ul { margin: 0 0 0.9rem; padding-left: 1.4rem; }
+  .guide li { margin-bottom: 0.3rem; }
+  .guide strong { font-weight: 700; }
+  .guide { margin: 0 0 1.25rem; }
+
+  .entry {  /* 묵상자가 쓴 글: 일기장에 펜으로 쓴 것처럼 */
+    margin: 0 0 1.5rem; padding: 0.1rem 0 0.1rem 1rem; border-left: 2px solid var(--pen);
+    color: var(--pen); font-family: var(--serif); line-height: 1.9; white-space: pre-wrap;
+  }
+
+  .passage { margin: 0.25rem 0 1.1rem; padding: 1rem 1rem 0.6rem; background: var(--sage); border-radius: 6px; }
+  .passage h2 { margin: 0 0 0.6rem; font-size: 0.9375rem; font-weight: 600; color: var(--moss); }
+  /* 번호 칸은 가장 긴 번호(예: 3:18-19)에 맞춰 넓어지고, 모든 줄이 같은 폭을 쓴다 */
+  .verses { display: grid; grid-template-columns: max-content 1fr; column-gap: 0.75rem; row-gap: 0.4rem; margin-bottom: 0.4rem; }
+  .verse { display: contents; }
+  .verse .number { color: var(--moss); font-size: 0.8125rem; font-variant-numeric: tabular-nums; padding-top: 0.3rem; white-space: nowrap; }
+  .verse .text { font-family: var(--serif); line-height: 1.9; }
+  .passage .gap { margin: 0.2rem 0 0.4rem; color: var(--muted); font-size: 0.875rem; }
+
+  /* 묵상 완료 기록: 대화와 구분되는 한 장의 종이 */
+  .record {
+    margin: 1.5rem 0 2rem; padding: 1.75rem 1.4rem 1.4rem; background: var(--sheet);
+    border: 1px solid var(--line); border-top: 4px solid var(--pen); border-radius: 4px;
+    box-shadow: 0 6px 24px rgba(28, 38, 48, 0.08);
+  }
+  .ask { margin: 0.5rem 0 1.5rem; padding: 1.1rem 1.2rem; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+  .ask .question { margin: 0 0 0.8rem; font-weight: 700; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  button.link { display: block; margin: 0 auto 0.5rem; padding: 0.2rem 0.4rem; background: none; color: var(--pen); font-size: 0.875rem; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  button.link[hidden] { display: none; }
+  .record .eyebrow { margin: 0; color: var(--moss); font-size: 0.875rem; font-weight: 700; letter-spacing: 0.04em; }
+  .record h2 { margin: 0.2rem 0 0.2rem; font-family: var(--serif); font-size: 1.625rem; line-height: 1.35; }
+  .record .subtitle { margin: 0 0 1.4rem; color: var(--muted); font-size: 0.9375rem; }
+  .record .part { padding: 1.1rem 0; border-top: 1px solid var(--line); }
+  .record h3 { margin: 0 0 0.4rem; color: var(--moss); font-size: 0.9375rem; font-weight: 700; }
+  .record .body { font-size: 1.125rem; line-height: 1.85; }
+  .record .body p { margin: 0; white-space: pre-wrap; }
+  .record .body p + p { margin-top: 0.5rem; }
+  .record .body ul, .record .body ol { margin: 0; padding-left: 1.3rem; }
+  .record .body li { margin-bottom: 0.35rem; }
+  .record .body li::marker { color: var(--moss); }
+  .record .own { color: var(--pen); font-family: var(--serif); }
+  .record .truth { margin: 0 -1.4rem; padding: 1.3rem 1.4rem; background: var(--sage); border-top: 0; }
+  .record .truth + .part { border-top: 0; }
+  .record .truth .body { font-size: 1.3125rem; font-weight: 700; line-height: 1.7; }
+  .record .truth .body li { margin-bottom: 0.5rem; }
+  .record .truth .summary { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.9375rem; }
+  .record .editing { outline: 1px dashed var(--pen); outline-offset: 5px; border-radius: 2px; }
+  .record .body[data-hint]:empty::before { content: attr(data-hint); opacity: 0.45; }
+  .record .confirm { padding-top: 1.2rem; border-top: 1px solid var(--line); }
+  .record .question { margin: 0 0 0.8rem; font-weight: 700; }
+  .record .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  button.quiet { background: transparent; color: var(--pen); border: 1px solid var(--pen); }
+
+  .waiting { color: var(--muted); letter-spacing: 0.3em; margin: 0 0 1.25rem; }
+  .waiting span { animation: pulse 1.2s infinite; }
+  .waiting span:nth-child(2) { animation-delay: 0.2s; }
+  .waiting span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .waiting span { animation: none; } }
+
+  .failed { margin: 0 0 1.25rem; padding: 0.85rem 1rem; border: 1px solid var(--line); border-radius: 8px; }
+  .failed p { margin: 0 0 0.6rem; font-size: 0.9375rem; }
+
+  /* 글 쓰는 자리 */
+  #composer {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper);
+    border-top: 1px solid var(--line);
+    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  #composer[hidden] { display: none; }
+  #composer.resting textarea, #composer.resting button { opacity: 0.4; }
+  #composer .row { max-width: 36rem; margin: 0 auto; display: flex; gap: 0.5rem; align-items: flex-end; }
+  #composer textarea {
+    flex: 1; min-width: 0; resize: none; max-height: 40vh; padding: 0.7rem 0.85rem;
+    font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
+    background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<!-- 표지 -->
+<div id="cover">
+  <div class="book">
+    <div class="leaf-page"></div>
+    <button type="button" class="board" id="open-book" aria-label="Diary with Jesus, 일기장 펼치기">
+      <span class="title">Diary with Jesus<small>말씀 묵상 일기</small></span>
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c4.6 3.4 6.4 7.4 5.4 11.4-.7 2.9-2.7 4.9-5.4 6.1-2.7-1.2-4.7-3.2-5.4-6.1C5.6 9.9 7.4 5.9 12 2.5Z" fill="currentColor"/><path d="M12 7v14.5" stroke="var(--cloth)" stroke-width="1.1" stroke-linecap="round"/></svg>
+      <span class="open-hint">눌러서 펼치기</span>
+    </button>
+    <button type="button" class="back-board" id="back-book" tabindex="-1" aria-label="Diary with Jesus 뒷면, 눌러서 펼치기">
+      <span class="verse">주의 말씀은<br>내 발에 등이요<br>내 길에 빛이니이다</span>
+      <span class="ref">시편 119:105</span>
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c4.6 3.4 6.4 7.4 5.4 11.4-.7 2.9-2.7 4.9-5.4 6.1-2.7-1.2-4.7-3.2-5.4-6.1C5.6 9.9 7.4 5.9 12 2.5Z" fill="currentColor"/><path d="M12 7v14.5" stroke="var(--cloth)" stroke-width="1.1" stroke-linecap="round"/></svg>
+      <span class="open-hint">눌러서 펼치기</span>
+    </button>
+    <span class="ribbon" aria-hidden="true"></span>
+  </div>
+  <p id="cover-note" role="status"></p>
+  <div id="cover-account"></div>
+</div>
+
+<main>
+  <header>
+    <div>
+      <h1>Diary with Jesus</h1>
+      <time id="today"></time>
+    </div>
+    <button type="button" id="skip-guide" class="link" hidden>안내 넘기기</button>
+    <button type="button" id="go-home" class="link" hidden>달력으로</button>
+  </header>
+
+  <!-- 펼친 뒤 두 칸: 묵상(달력)과 돌아보기 -->
+  <nav id="tabs" class="tabs" role="tablist" aria-label="일기장의 두 칸" hidden>
+    <button type="button" role="tab" id="tab-home" aria-selected="true">묵상</button>
+    <button type="button" role="tab" id="tab-review" aria-selected="false">돌아보기</button>
+  </nav>
+
+  <!-- 첫 화면: 달력 -->
+  <section id="home">
+    <div class="month-bar">
+      <button type="button" id="prev-month" class="quiet" aria-label="이전 달">‹</button>
+      <h2 id="month-title"></h2>
+      <button type="button" id="next-month" class="quiet" aria-label="다음 달">›</button>
+    </div>
+    <div class="weekdays" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+    <div id="calendar" class="calendar"></div>
+    <p id="home-status" class="home-status" role="status"></p>
+    <p id="home-note" class="home-note"></p>
+    <div id="home-action" class="home-action"></div>
+    <nav id="home-links" class="home-links" aria-label="묵상 메뉴"></nav>
+    <div id="home-extra"></div>
+  </section>
+
+  <!-- 로그인: 표지를 펼치면 누구의 일기장인지부터 정한다 (일기장이 연결되어 있을 때만) -->
+  <section id="login" hidden>
+    <h2>나의 일기장</h2>
+    <p class="lead">묵상을 일기장에 적어 두고, 어느 기기에서나 이어서 펼쳐 봅니다.</p>
+    <div class="buttons"><button type="button" id="sign-in">Google 계정으로 시작하기</button></div>
+    <p class="notice" id="login-notice" role="alert"></p>
+    <p class="hint">일기장에는 로그인한 본인만 들어올 수 있습니다.</p>
+  </section>
+
+  <!-- 안내: 이 일기장으로 묵상하는 법. 처음 한 번 보이고, 익숙한 사람은 넘긴다 -->
+  <section id="guide" class="guide-page" hidden>
+    <div class="preface">
+      <p>성경은 쓰여진 시대의 역사적 상황 안에서, 원독자가 살고 있는 문화적 배경 안에서 그들의 언어와 문학 양식의 방법으로 저자를 통해 말씀하시는 하나님의 음성입니다.</p>
+      <p>말씀 한 단락을 읽고 질문하고 답하며 오늘도 나에게 말씀하시는 하나님을 만나며 진리를 스스로 찾고 적용하는 삶을 살아가기, 묵상하는 삶입니다.</p>
+    </div>
+    <h2>이 일기장으로 묵상하는 법</h2>
+    <ol>
+      <li><div><strong>기도</strong><span>내 말로 짧게 기도하며 시작합니다.</span></div></li>
+      <li><div><strong>본문 읽기</strong><span>오늘의 본문을 천천히 읽습니다. 성경이 곁에 없어도 됩니다. 본문은 일기장이 펼쳐 줍니다.</span></div></li>
+      <li><div><strong>관찰</strong><span>무엇이 쓰여 있는지 묻고 답하며 관찰합니다.</span></div></li>
+      <li><div><strong>배경</strong><span>이 글을 처음 받은 사람들의 상황을 알아봅니다.</span></div></li>
+      <li><div><strong>해석</strong><span>왜 저자는 이 글을 처음 받는 사람에게 이 말씀을 했을까 질문하고 생각해 봅니다.</span></div></li>
+      <li><div><strong>진리</strong><span>원독자에게 하신 말씀은 오늘 나에게도 말씀하시는 하나님을 만나게 합니다. 이 말씀을 문장으로 써 봅니다.</span></div></li>
+      <li><div><strong>적용과 기도</strong><span>성경에서 만난 하나님과 동행하며 살아 낼 한 가지를 정하고 기도하여 삶으로 살아 냅니다.</span></div></li>
+    </ol>
+    <div class="notes">
+      <p>중간에 멈춰도 됩니다. 다시 열면 멈춘 곳에서 이어집니다.</p>
+    </div>
+    <div class="buttons">
+      <button type="button" id="guide-done">달력 펼치기</button>
+    </div>
+  </section>
+
+  <!-- 본문 적는 쪽: 처음 묵상하거나, 다른 본문으로 묵상할 때 -->
+  <section id="entry" hidden>
+    <h2>오늘 묵상할 본문</h2>
+    <p class="lead" id="entry-lead"></p>
+    <div id="entry-form"></div>
+    <div id="entry-browse"></div>
+  </section>
+
+  <!-- 지난 묵상 보기 -->
+  <section id="past" hidden></section>
+
+  <!-- 돌아보기 안내: 돌아보기에서 무엇을 하는가. 처음 한 번 보이고, 그 뒤에는 '안내 보기'로 연다 -->
+  <section id="review-guide" class="guide-page" hidden>
+    <div class="preface">
+      <p>날마다 묵상하며 붙잡은 진리를 책별로, 해마다 돌아보는 자리입니다.</p>
+      <p>한 권의 책을 묵상하는 동안 무엇을 붙잡았고 무엇을 살아 내려 했는지 모아 보면, 그 책을 통해 말씀하신 하나님을 다시 만나게 됩니다.</p>
+    </div>
+    <h2>돌아보기에서 하는 일</h2>
+    <ol>
+      <li><div><strong>어떤 책을 묵상했나</strong><span>"2025년에는 어떤 책을 묵상했지?"처럼 물으면, 책마다 몇 편 묵상했는지 알려 줍니다.</span></div></li>
+      <li><div><strong>붙잡은 진리</strong><span>한 책에서 붙잡은 진리를 두세 줄로 모아 줍니다.</span></div></li>
+      <li><div><strong>적용</strong><span>그 책을 묵상하며 정한 적용을 두세 줄로 요약해 줍니다.</span></div></li>
+      <li><div><strong>성경의 핵심과 나란히</strong><span>📖 내 묵상 아래에 💡 그 책의 일반적인 핵심을 함께 보여 줍니다. 견주어 보는 것은 묵상하는 사람의 몫입니다.</span></div></li>
+    </ol>
+    <div class="notes">
+      <p>물을 때마다 새 쪽이 생깁니다. ‹ › 를 누르거나 옆으로 밀어 지난 쪽을 봅니다.</p>
+      <p>최근에 마친 책은 돌아보기 첫 화면에서 '요약 보기'로 바로 돌아볼 수 있습니다.</p>
+      <p>하루의 묵상은 묵상 칸의 달력에서 날짜를 눌러 봅니다.</p>
+    </div>
+    <div class="buttons">
+      <button type="button" id="review-guide-done">돌아보기 펼치기</button>
+    </div>
+  </section>
+
+  <!-- 돌아보기: 지난 묵상을 책별로, 해마다 묻는다. 물음 하나에 한 쪽 -->
+  <section id="review" hidden>
+    <div id="page-bar" class="page-bar" hidden>
+      <button type="button" id="page-list" class="link back">‹ 목록으로</button>
+      <div class="turn">
+        <button type="button" id="page-prev" class="quiet" aria-label="앞 쪽">‹</button>
+        <span id="page-count" class="count" aria-live="polite"></span>
+        <button type="button" id="page-next" class="quiet" aria-label="뒤 쪽">›</button>
+      </div>
+    </div>
+    <div id="review-page" aria-live="polite"></div>
+  </section>
+
+  <!-- 기록 찾기 -->
+  <section id="search" hidden>
+    <h2 class="view-title">기록 찾기</h2>
+    <input id="search-box" type="search" placeholder="낱말을 적어 주세요 (예: 은혜, 에베소서)" aria-label="찾을 낱말" autocomplete="off">
+    <p class="hint" id="search-count"></p>
+    <div id="search-results"></div>
+  </section>
+
+  <!-- 책별 정리: 한 책에서 찾은 진리를 모아 본다 -->
+  <section id="books" hidden></section>
+
+  <!-- 한 해 돌아보기: 언제 어느 본문을 묵상했는가 -->
+  <section id="year" hidden></section>
+
+  <!-- 묵상 -->
+  <div id="thread" aria-live="polite"></div>
+</main>
+
+<!-- 돌아보기에서 묻는 자리: 화면 아래에 늘 있다 -->
+<form id="ask-bar" class="passage-form" hidden>
+  <div class="row">
+    <input id="ask-box" placeholder="지난 묵상에 대해 물어보세요" aria-label="돌아보기에 묻기" autocomplete="off" enterkeyhint="send" required>
+    <button type="submit">묻기</button>
+  </div>
+</form>
+
+<form id="composer" hidden autocomplete="off">
+  <!-- 본문은 글 쓰는 칸 바로 위에서 언제든 펼쳐 볼 수 있다 -->
+  <div id="passage-panel" hidden></div>
+  <div class="tools">
+    <button type="button" id="passage-toggle" class="link" aria-expanded="false">본문</button>
+    <button type="button" id="wrap-up" class="link" hidden>묵상을 마치고 정리하기</button>
+  </div>
+  <div class="row">
+    <label class="sr-only" for="message">묵상 적기</label>
+    <textarea id="message" rows="1" placeholder="여기에 적어 주세요" autocomplete="off" data-form-type="other" enterkeyhint="enter"></textarea>
+    <button type="submit" id="send" disabled>보내기</button>
+  </div>
+</form>
+
+<script>
+const thread = document.getElementById('thread');
+const composer = document.getElementById('composer');
+const messageBox = document.getElementById('message');
+const sendButton = document.getElementById('send');
+const wrapUpLink = document.getElementById('wrap-up');
+let sentCount = 0;
+
+/* ---- 임시 보관: 일기장(DB)이 연결되기 전까지 이 기기의 브라우저에 둔다 ---- */
+const store = {
+  read(key, fallback) {
+    try { const value = localStorage.getItem('dwj.' + key); return value ? JSON.parse(value) : fallback; }
+    catch (e) { return fallback; }
+  },
+  write(key, value) {
+    let kept = true;
+    try { localStorage.setItem('dwj.' + key, JSON.stringify(value)); } catch (e) { kept = false; }
+    if (STATE_KEYS.includes(key)) stateChanged();     // 묵상 중인 자리와 하다가 멈춘 묵상은 일기장에도 적어 둔다
+    return kept;
+  },
+  only(key, value) {          // 이 기기에만 적는다 (일기장에서 읽어 온 것을 그대로 옮겨 적을 때)
+    try { localStorage.setItem('dwj.' + key, JSON.stringify(value)); return true; } catch (e) { return false; }
+  },
+};
+const STATE_KEYS = ['progress', 'draft', 'planned', 'guided'];
+/* 한글을 한 모양(NFC)으로 맞춘다. Mac 파일 이름에서 온 예전 기록(NFD)도 같은 책으로 보이게 한다 */
+function nfcRecord(r) {
+  return { ...r, book: String(r.book || '').normalize('NFC'), passage: String(r.passage || '').normalize('NFC') };
+}
+let records = store.read('records', []).map(nfcRecord);      // 저장한 묵상 기록들. 항목마다 date, meditation_time이 붙는다
+let progress = store.read('progress', null);  // 묵상 중인 책에서 어디까지 왔는가: { book, chapter, verse }
+let currentMode = 'typed';                    // 이번 묵상의 본문을 어떻게 정했는가: 'continue' | 'typed'
+let planned = store.read('planned', null);    // 정해 두고 아직 시작하지 않은 본문: { ref, mode }
+let planning = false;                         // 본문을 정하면 바로 묵상하지 않고 달력으로 돌아가는가 (처음 묵상할 때)
+let draft = store.read('draft', null);        // 하다가 멈춘 묵상: { date, ref, mode, messages }
+if (draft && !(draft.messages && draft.messages.length)) draft = null;
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function dateText(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+const todayKey = dateKey(new Date());
+
+function getJSON(path) { return request(path, {}); }
+
+/* ---- 일기장: 로그인하고, 묵상 기록을 사용자별로 저장한다 ----
+   서버에 일기장이 연결되어 있지 않으면(login이 없으면) 예전처럼 이 기기에만 보관한다.
+   기록마다 번호(id)가 있다. 일기장에 올라간 기록에는 누구의 것인지(_owner)를 적어 둔다.
+   _owner가 없는 기록은 이 기기에만 있는 것이다. */
+let appConfig = { login: null, firebase: null };
+let account = null;           // 로그인한 사람: { uid, email, token() }
+let firebaseAuth = null;
+
+const RECORD_FIELDS = ['date', 'meditation_time', 'chapter_start', 'verse_start', 'chapter_end', 'verse_end', 'book', 'passage', 'title',
+  'prayer', 'observation', 'background', 'interpretation', 'truth', 'applied_truth', 'application', 'closing_prayer'];
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const tag = document.createElement('script');
+    tag.src = src; tag.onload = resolve; tag.onerror = () => reject(new Error('로그인 도구를 불러오지 못했습니다.'));
+    document.head.append(tag);
+  });
+}
+
+const configReady = (async () => {
+  try { appConfig = await (await fetch('/api/config')).json(); } catch (e) { return; }
+  if (appConfig.login === 'google' && appConfig.firebase) {
+    try {
+      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
+      firebase.initializeApp(appConfig.firebase);
+      firebaseAuth = firebase.auth();
+      await new Promise(resolve => firebaseAuth.onAuthStateChanged(user => {     // 예전에 로그인했으면 바로 알아본다
+        account = user ? { uid: user.uid, email: user.email || '', token: () => user.getIdToken() } : null;
+        resolve();
+      }));
+    } catch (e) { appConfig.loginProblem = e.message; }
+  } else if (appConfig.login === 'dev') {        // 내 컴퓨터에서 시험할 때
+    const name = store.read('dev-user', null);
+    if (name) account = { uid: name, email: name + '@dev', token: async () => 'dev:' + name };
+  }
+})();
+
+async function signIn() {
+  const notice = document.getElementById('login-notice');
+  notice.textContent = '';
+  try {
+    if (appConfig.login === 'dev') {
+      const name = (window.prompt('시험용 이름') || '').trim();
+      if (!name) return;
+      store.only('dev-user', name);
+      account = { uid: name, email: name + '@dev', token: async () => 'dev:' + name };
+    } else {
+      if (!firebaseAuth) throw new Error(appConfig.loginProblem || '로그인을 준비하지 못했습니다. 화면을 새로 불러와 주세요.');
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try { await firebaseAuth.signInWithPopup(provider); }
+      catch (e) {
+        if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
+        if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') {
+          await firebaseAuth.signInWithRedirect(provider); return;      // 창을 띄울 수 없는 곳에서는 화면을 옮겨 로그인한다
+        }
+        throw e;
+      }
+      const user = firebaseAuth.currentUser;
+      account = { uid: user.uid, email: user.email || '', token: () => user.getIdToken() };
+    }
+    await enterDiary();
+  } catch (e) {
+    notice.textContent = `로그인하지 못했습니다. ${e.message || ''}`.trim();
+  }
+}
+
+/* 로그아웃: 책을 덮은 뒷면에서 묻는다. 일기장(Firestore)은 그대로 두고, 이 기기에서 일기장의 것과 돌아보기의 쪽을 치운다 */
+async function signOut() {
+  if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; await pushState(); }   // 하다가 멈춘 묵상을 일기장에 먼저 적어 둔다
+  try { if (firebaseAuth) await firebaseAuth.signOut(); } catch (e) {}
+  // 함께 쓰는 기기에 남의 묵상이 남지 않게: 일기장에서 가져온 것은 이 기기에서 치운다. 이 기기에만 있는 것은 남긴다
+  records = records.filter(r => !r._owner);
+  store.only('records', records);
+  progress = draft = planned = null;
+  for (const key of ['progress', 'draft', 'planned', 'stateAt', 'dev-user']) store.only(key, null);
+  reviewPages = []; reviewAt = 0; store.only('reviewPages', []);
+  account = null;
+  show('login');
+  coverNote.textContent = '로그아웃했습니다. 다시 펼치면 로그인합니다.';
+  renderCoverAccount();
+}
+
+/* 기록 번호. 새 기록은 무작위로, 번호 없이 보관되어 있던 예전 기록은 내용에서 만들어 언제나 같은 번호가 나오게 한다 */
+function newId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+function idFrom(record) {
+  const text = [record.date, record.meditation_time, record.passage, record.truth].join('|');
+  let a = 0x811c9dc5, b = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    a = Math.imul(a ^ text.charCodeAt(i), 0x01000193) >>> 0;
+    b = Math.imul(b + text.charCodeAt(i), 0x85ebca6b) >>> 0;
+  }
+  return 'm' + a.toString(36).padStart(7, '0') + b.toString(36).padStart(7, '0');
+}
+
+/* 일기장에 보낼 모양: 약속한 17개 항목만. 예전에 보관한 기록에 없는 항목은 비워서 채운다 */
+function forDiary(record) {
+  const out = {};
+  for (const field of RECORD_FIELDS) out[field] = record[field];
+  for (const field of ['title', 'prayer', 'observation', 'background', 'interpretation', 'truth', 'application', 'closing_prayer'])
+    if (typeof out[field] !== 'string') out[field] = '';
+  if (typeof out.applied_truth !== 'string') {         // 적용 진리가 생기기 전의 기록: 진리가 하나면 그 진리, 여럿이면 비워 둔다
+    const truths = out.truth.split('\n').map(line => line.replace(/^\s*(?:[-•]|\d+[.)])\s+/, '').trim()).filter(Boolean);
+    out.applied_truth = truths.length === 1 ? truths[0] : '';
+  }
+  if (!/^\d\d:\d\d$/.test(out.meditation_time || '')) out.meditation_time = '00:00';
+  return out;
+}
+
+function sameRecord(a, b) { return RECORD_FIELDS.every(field => a[field] === b[field]); }
+function sortRecords() { records.sort((a, b) => (a.date + (a.meditation_time || '')).localeCompare(b.date + (b.meditation_time || ''))); }
+function unsaved() { return records.filter(r => !r._owner); }
+
+/* 묵상 하나를 일기장에 올린다. 서버가 저장한 뒤 다시 읽어 돌려준 것이 보낸 것과 같아야 올라간 것으로 본다 */
+async function upload(record) {
+  const sent = forDiary(record);
+  const data = await send_('POST', '/api/diary/records', { id: record.id, record: sent });
+  if (!data.record || data.record.id !== record.id || !sameRecord(data.record, sent)) throw new Error('올린 뒤 다시 읽은 내용이 보낸 것과 다릅니다.');
+  Object.assign(record, sent, { _owner: account.uid });
+}
+
+/* 로그인한 뒤: 일기장의 묵상을 읽어 달력에 펼친다 */
+async function loadDiary() {
+  let changed = false;
+  for (const record of records) if (!record.id) { record.id = idFrom(record); changed = true; }
+  if (changed) store.only('records', records);
+  const data = await getJSON('/api/diary/records');
+  const mine = data.records.map(r => ({ ...nfcRecord(r), _owner: account.uid }));
+  const ids = new Set(mine.map(r => r.id));
+  records = [...mine, ...records.filter(r => !r._owner && !ids.has(r.id))];     // 일기장의 것 + 이 기기에만 있는 것
+  sortRecords();
+  store.only('records', records);
+
+  const remote = (await getJSON('/api/diary/state')).state;
+  if (remote && remote.updated_at > store.read('stateAt', 0)) {      // 다른 기기에서 더 나중에 묵상했다: 그 자리를 따른다
+    progress = remote.progress || null; draft = remote.draft || null; planned = remote.planned || null;
+    store.only('progress', progress); store.only('draft', draft); store.only('planned', planned);
+    if (remote.guided) store.only('guided', true);
+    store.only('stateAt', remote.updated_at);
+  } else if (store.read('stateAt', 0) || progress || draft || planned) {
+    pushState();
+  }
+}
+
+/* 묵상 중인 자리와 하다가 멈춘 묵상을 일기장에 적어 둔다. 다른 기기에서 이어 갈 수 있게 */
+let stateTimer = null;
+function stateChanged() {
+  try { localStorage.setItem('dwj.stateAt', JSON.stringify(Date.now())); } catch (e) {}
+  if (!account) return;
+  clearTimeout(stateTimer);
+  stateTimer = setTimeout(pushState, 600);
+}
+async function pushState() {
+  if (!account) return;
+  const state = { progress, draft, planned, guided: store.read('guided', false), updated_at: store.read('stateAt', 0) || Date.now() };
+  try { await send_('PUT', '/api/diary/state', { state }); } catch (e) {}      // 실패해도 묵상을 막지 않는다. 다음에 다시 적는다
+}
+
+/* 이 기기에만 있는 묵상을 일기장으로 옮긴다. 옮기기 전에 그대로 한 벌을 따로 남겨 두고, 그 사본은 지우지 않는다 */
+async function moveToDiary(status) {
+  const waiting = unsaved();
+  store.only('backup-' + todayKey, waiting.map(r => ({ ...r })));
+  const failed = [];
+  let moved = 0;
+  for (const record of waiting) {
+    status.textContent = `옮기는 중… ${moved + failed.length + 1} / ${waiting.length}`;
+    try { await upload(record); moved += 1; }
+    catch (e) { failed.push(`${record.date} ${record.passage}: ${e.message}`); }
+    store.only('records', records);
+  }
+  return { moved, failed };
+}
+
+/* 표지를 펼치고 들어온 뒤의 첫 쪽 */
+async function enterDiary() {
+  if (appConfig.login && !account) { show('login'); return; }
+  let problem = '';
+  if (account) {
+    try { await loadDiary(); }
+    catch (e) { problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`; }
+  }
+  renderHome(problem);
+  show(store.read('guided', false) ? 'home' : 'guide');
+}
+
+/* ---- 화면 바꾸기 ---- */
+const views = { home: document.getElementById('home'),
+                past: document.getElementById('past'), thread: document.getElementById('thread'),
+                search: document.getElementById('search'), books: document.getElementById('books'),
+                year: document.getElementById('year'), review: document.getElementById('review'),
+                reviewGuide: document.getElementById('review-guide'),
+                guide: document.getElementById('guide'), entry: document.getElementById('entry'),
+                login: document.getElementById('login') };
+const mainBox = document.querySelector('main');
+const goHome = document.getElementById('go-home');
+let currentView = 'home';
+let backTo = 'home';        // 책별·한 해 보기에서 돌아갈 칸: 'home' | 'review'
+const tabs = document.getElementById('tabs');
+const askBar = document.getElementById('ask-bar');
+
+function show(name) {
+  currentView = name;
+  for (const [key, node] of Object.entries(views)) node.hidden = key !== name;
+  if (name === 'home' || name === 'review') backTo = name;
+  goHome.hidden = name === 'home' || name === 'review' || name === 'guide' || name === 'reviewGuide' || name === 'login';
+  goHome.textContent = backTo === 'review' ? '돌아보기로' : '달력으로';
+  tabs.hidden = name !== 'home' && name !== 'review';
+  document.getElementById('tab-home').setAttribute('aria-selected', String(name === 'home'));
+  document.getElementById('tab-review').setAttribute('aria-selected', String(name === 'review'));
+  askBar.hidden = name !== 'review';
+  document.getElementById('skip-guide').hidden = name !== 'guide';
+  mainBox.classList.remove('turning'); void mainBox.offsetWidth; mainBox.classList.add('turning');   // 한 장이 넘어온다
+  if (name === 'thread') openPassagePanel(false);
+  if (name !== 'thread') { composer.hidden = true; document.documentElement.style.setProperty('--composer-height', (name === 'review' ? askBar.offsetHeight : 0) + 'px'); }
+  window.scrollTo(0, 0);
+}
+
+/* ---- 본문 보기: 해석과 진리를 쓸 때에도 본문을 글 쓰는 칸 바로 위에 두고 본다 ---- */
+const passageToggle = document.getElementById('passage-toggle');
+const passagePanel = document.getElementById('passage-panel');
+
+function openPassagePanel(open) {
+  passagePanel.hidden = !open;
+  passageToggle.setAttribute('aria-expanded', String(open));
+  passageToggle.textContent = open ? '본문 접기' : `본문 · ${passage ? passage.reference : ''}`;
+  if (open) passagePanel.replaceChildren(passageCard(passage.verses, null));
+}
+passageToggle.onclick = () => openPassagePanel(passagePanel.hidden);
+
+let sessionId = null;
+let passage = null;   // { reference, verses, missing }
+let busy = false;
+let askedToWrapUp = false;
+
+document.getElementById('today').textContent = new Date().toLocaleDateString('ko-KR',
+  { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;   // textContent만 쓴다 (HTML로 해석하지 않음)
+  return node;
+}
+
+/* 접속 암호: 서버가 암호를 요구하면 한 번 물어 기기에 적어 두고, 그 뒤로는 함께 보낸다 */
+function passcodeHeader() {
+  let code = '';
+  try { code = localStorage.getItem('dwj.passcode') || ''; } catch (e) {}
+  return code ? { 'X-Passcode': encodeURIComponent(code) } : {};
+}
+
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/* 지금 기다리는 표시에 한마디를 남긴다 (연결이 끊겼다는 것 등) */
+function waitingNote(text) {
+  const marks = document.querySelectorAll('.waiting');
+  const last = marks[marks.length - 1];
+  if (last && last.say) last.say(text);
+}
+
+/* 휴대폰이 다시 연결될 때까지 기다린다 (지하철 터널 등). 너무 오래면 그냥 돌아온다 */
+function backOnline(limit) {
+  if (navigator.onLine) return pause(0);
+  return new Promise(resolve => {
+    const done = () => { window.removeEventListener('online', done); clearTimeout(timer); setTimeout(resolve, 1000); };
+    const timer = setTimeout(done, limit);
+    window.addEventListener('online', done);
+  });
+}
+
+/* 연결이 끊기거나 서버가 깨어나는 중이면 스스로 다시 시도한다.
+   끊긴 동안은 연결이 돌아오기를 기다렸다가 다시 보낸다 (3분쯤까지).
+   같은 글이 두 번 가도 서버가 가려내므로 대화가 두 번 쌓이지 않는다. */
+const REQUEST_LIMIT = 100000;    // 답이 이만큼 오지 않으면 연결이 끊긴 것으로 보고 다시 보낸다
+async function request(path, options) {
+  let tries = 0, asked = 0;
+  for (;;) {
+    let response;
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), REQUEST_LIMIT);
+    try {
+      const signed = account ? { Authorization: 'Bearer ' + await account.token() } : {};
+      response = await fetch(path, { ...options, signal: stop.signal,
+                                     headers: { ...(options.headers || {}), ...passcodeHeader(), ...signed } });
+    } catch (e) {
+      clearTimeout(timer);
+      if (tries++ < 5) {
+        waitingNote('연결이 끊겼습니다. 다시 연결되면 이어서 받아 옵니다.');
+        await backOnline(60000);
+        await pause(tries === 1 ? 1500 : 4000);
+        if (navigator.onLine) waitingNote('다시 연결되었습니다. 답을 받아 오고 있습니다.');
+        continue;
+      }
+      throw new Error('서버에 연결하지 못했습니다. 연결을 확인하고 다시 보내 주세요.');
+    }
+    clearTimeout(timer);
+    const data = await response.json().catch(() => ({}));
+    if (response.status >= 502 && !data.error && tries++ < 2) { await pause(4000); continue; }   // 서버가 깨어나는 중
+    if (response.status === 401 && asked < 2) {
+      const code = window.prompt(asked++ ? '암호가 맞지 않습니다. 다시 입력해 주세요.' : '접속 암호를 입력해 주세요.');
+      if (code === null) throw new Error('접속 암호가 필요합니다.');
+      try { localStorage.setItem('dwj.passcode', code.trim()); } catch (e) {}
+      continue;
+    }
+    if (!response.ok) {
+      const error = new Error(data.error || `서버 오류 (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+}
+
+function send_(method, path, body) {
+  return request(path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+}
+
+function api(path, body) {
+  return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+/* 본문 카드: 본문 글자는 언제나 서버가 성경 DB에서 꺼낸 것을 그대로 쓴다 */
+function verseRow(v, showChapter) {
+  const row = el('div', 'verse');
+  row.append(el('span', 'number', showChapter ? `${v.chapter}:${v.label}` : `${v.label}`),
+             el('span', 'text', v.text));
+  return row;
+}
+
+function passageCard(verses, title) {
+  const card = el('section', 'passage');
+  if (title) card.append(el('h2', '', title));
+  const crossesChapter = new Set(passage.verses.map(v => v.chapter)).size > 1;
+  // 절 하나만 보일 때와 장을 넘는 본문에서는 '장:절'로, 그 밖에는 절 번호만 적는다
+  const list = el('div', 'verses');
+  for (const v of verses) list.append(verseRow(v, !title || crossesChapter));
+  card.append(list);
+  if (title && passage.missing.length) {
+    card.append(el('p', 'gap', `성경 DB에 없는 절: ${passage.missing.join(', ')}`));
+  }
+  return card;
+}
+
+/* 인도자의 글 안의 **굵은 글씨** */
+function inline(node, text) {
+  text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => {
+    if (part) node.append(i % 2 ? el('strong', '', part) : part);
+  });
+}
+
+/* 인도자의 글 한 덩어리: 문단, 번호 목록(1. 2.), 점 목록(- )을 알아본다 */
+function renderBlock(box, block) {
+  let list = null, para = null;
+  for (const raw of block.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+    const dotted = line.match(/^[-•*]\s+(.*)$/);
+    if (numbered || dotted) {
+      const tag = numbered ? 'OL' : 'UL';
+      if (!list || list.tagName !== tag) {
+        list = el(tag.toLowerCase());
+        if (numbered) list.start = Number(numbered[1]);
+        box.append(list);
+      }
+      const item = el('li');
+      inline(item, numbered ? numbered[2] : dotted[1]);
+      list.append(item);
+      para = null;
+    } else {
+      if (para) para.append(document.createElement('br'));
+      else { para = el('p'); box.append(para); }
+      inline(para, line.replace(/^#{1,4}\s+/, ''));
+      list = null;
+    }
+  }
+}
+
+/* 인도자의 글: [[본문]], [[장:절]], [[장:절-절]] 표시를 본문 카드로 바꾼다.
+   절 표시는 그 절을 포함하는 단위를 찾아 보여 준다 (묶인 단위는 통째로). */
+function renderGuide(text) {
+  const box = el('div', 'guide');
+  const parts = text.split(/\[\[\s*([^\[\]]{1,30}?)\s*\]\]/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const card = markedPassage(part);
+      if (card) box.append(card);
+      return;
+    }
+    for (const block of part.split(/\n{2,}/)) renderBlock(box, block);
+  });
+  return box;
+}
+
+/* [[본문]], [[3:18]], [[3:18-19]], [[3장 18절]], [[18절]], [[골로새서 3:18]] 을 모두 알아본다.
+   오늘의 본문에 없는 절이면 조용히 빼지 않고, 없다는 것을 알린다. */
+function markedPassage(mark) {
+  if (mark.includes('본문')) return passageCard(passage.verses, passage.reference);
+  const full = mark.match(/(\d+)\s*[:장]\s*(\d+)/);
+  const alone = mark.match(/(\d+)/);
+  if (!alone) return null;                          // 본문 표시가 아닌 다른 표시
+  const verse = full
+    ? passage.verses.find(v => v.chapter === Number(full[1]) && v.start <= Number(full[2]) && Number(full[2]) <= v.end)
+    : passage.verses.find(v => v.start <= Number(alone[1]) && Number(alone[1]) <= v.end);
+  if (verse) return passageCard([verse], null);
+  return el('p', 'hint', `(${full ? `${full[1]}:${full[2]}` : alone[1]}절은 오늘의 본문 밖에 있습니다)`);
+}
+
+function setBusy(value) {
+  busy = value;
+  sendButton.disabled = busy || !messageBox.value.trim();
+  composer.classList.toggle('resting', busy);            // 인도자가 쓰는 동안은 흐리게
+  const first = draft && draft.messages.length <= 1;      // 첫 글은 기도다
+  messageBox.placeholder = busy ? '' : first ? '기도를 적어 주세요' : '여기에 적어 주세요';
+}
+
+/* 글 하나를 보내고 인도자의 답을 아래에 이어 붙인다. message가 null이면 묵상의 첫 말을 받는다. */
+/* 서버는 한동안 쓰지 않으면 쉬다가 깨어나면서 진행 중인 대화를 잊는다.
+   그때는 기기에 보관한 대화로 조용히 되살린 뒤 하던 일을 이어서 한다. */
+async function withSession(call) {
+  try { return await call(); }
+  catch (e) {
+    if (e.status !== 404 || !draft || !draft.messages.length) throw e;
+    const data = await api('/api/meditation/resume', { ref: draft.ref, messages: draft.messages });
+    sessionId = data.session_id;
+    return await call();
+  }
+}
+
+/* 기다리는 표시. 오래 걸리면 한마디 덧붙인다 */
+function waitingMark(label) {
+  const waiting = el('p', 'waiting');
+  waiting.append(el('span', '', '•'), el('span', '', '•'), el('span', '', '•'), el('span', 'sr-only', label));
+  const say = (text) => {             // 덧붙이는 말은 하나만 둔다 (바뀌면 고쳐 쓴다)
+    if (!waiting.isConnected) return;
+    const slow = waiting.querySelector('.slow') || waiting.appendChild(el('span', 'slow'));
+    slow.textContent = text;
+  };
+  waiting.say = say;
+  setTimeout(() => { if (!waiting.querySelector('.slow')) say('조금만 기다려 주세요.'); }, 12000);
+  setTimeout(() => { if (waiting.querySelector('.slow')?.textContent === '조금만 기다려 주세요.')
+    say('조금만 더 기다려 주세요. 한동안 쓰지 않았으면 서버가 깨어나는 데 1분쯤 걸립니다.'); }, 30000);
+  return waiting;
+}
+
+/* resume: 멈췄다가 돌아온 직후의 첫 호출. 묵상자의 글 없이, 인도자가 어디까지 했는지 짚고 이어 간다. */
+async function send(message, resume = false) {
+  setBusy(true);
+  const waiting = waitingMark('인도자가 쓰고 있습니다');
+  thread.append(waiting);
+  waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  try {
+    // expect: 지금까지 주고받은 수. 연결이 끊겨 같은 글이 두 번 가도 서버가 가려낸다
+    const expect = draft ? (draft.messages.length ? draft.messages.length + 1 : 0) : null;
+    const data = await withSession(() =>
+      api('/api/meditation/chat', { session_id: sessionId, message, resume, expect }));
+    if (draft) {            // 주고받은 것을 기기에 보관해 둔다. 나중에 이어서 할 수 있게
+      if (resume) draft.messages.push({ role: 'user', hidden: 'resume' });
+      else if (message) draft.messages.push({ role: 'user', content: message });
+      draft.messages.push({ role: 'assistant', content: data.reply });
+      store.write('draft', draft);
+    }
+    const reply = renderGuide(data.reply);
+    waiting.replaceWith(reply);
+    reply.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    setBusy(false);
+    if (data.completed && !askedToWrapUp) {
+      askedToWrapUp = true;
+      askToWrapUp();         // 묵상이 끝나면 입력칸을 치우고 정리할지 묻는다
+    } else {
+      messageBox.focus({ preventScroll: true });
+    }
+  } catch (e) {
+    const failed = el('div', 'failed');
+    failed.setAttribute('role', 'alert');
+    const retry = el('button', '', '다시 보내기');
+    retry.type = 'button';
+    retry.onclick = () => { failed.remove(); send(message, resume); };
+    failed.append(el('p', '', `답을 받지 못했습니다. ${e.message}`), retry);
+    waiting.replaceWith(failed);
+    failed.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    // busy를 풀지 않는다: 같은 글을 다시 보내기 전에는 새 글을 보낼 수 없다
+  }
+}
+
+/* 묵상 완료 기록: 묵상 부분이 만들어 내놓는 결과.
+   묵상자가 읽어 보고, 고칠 곳은 직접 고친 뒤, "이대로 저장"을 누르면 확정된다.
+   실제 저장은 Diary 쪽의 일이다. 확정된 기록은 window.saveMeditationRecord(record)로 넘긴다.
+   그 함수가 아직 없으면 확정되었다는 것만 알린다. */
+const RECORD_SECTIONS = [
+  ['prayer', '시작 기도'], ['observation', '관찰'], ['background', '배경'],
+  ['interpretation', '해석'], ['truth', '내가 찾은 진리'], ['applied_truth', '적용 진리'],
+  ['application', '적용'], ['closing_prayer', '기도'],
+];
+const OWN_WORDS = ['prayer', 'truth', 'applied_truth', 'closing_prayer'];   // 묵상자가 직접 쓴 글
+
+/* 적용 진리: 찾은 진리 가운데 삶에 적용하기로 고른 하나. 진리가 하나뿐이면 진리와 같으므로 따로 보이지 않는다 */
+function squeezeTruth(text) { return (text || '').replace(/^\s*(?:[-•]|\d+[.)])\s+/gm, '').replace(/[\s.,!?]/g, ''); }
+function hasOwnAppliedTruth(record) {
+  return Boolean(record.applied_truth) && squeezeTruth(record.applied_truth) !== squeezeTruth(record.truth);
+}
+const todayText = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+/* 기록을 일기 글로 옮긴다 (파일로 내려받을 때 쓴다) */
+function recordAsText(record) {
+  const lines = [`${record.passage} 묵상 정리`, `${record.date ? dateText(record.date) : todayText} · ${record.title}`, ''];
+  for (const [key, label] of RECORD_SECTIONS) {
+    if (record[key]) lines.push(label, record[key], '');
+  }
+  return lines.join('\n');
+}
+
+function downloadText(name, text) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function showComposer(visible) {
+  composer.hidden = !visible;
+  if (!visible) document.documentElement.style.setProperty('--composer-height', '0px');
+}
+
+/* 묵상이 끝났을 때: "오늘 묵상을 정리해 드릴까요?" */
+function askToWrapUp() {
+  showComposer(false);
+  const box = el('div', 'ask');
+  const yes = el('button', '', '정리해 주세요');
+  const more = el('button', 'quiet', '조금 더 나눌게요');
+  yes.type = more.type = 'button';
+  yes.onclick = () => { box.remove(); showRecord(); };
+  more.onclick = () => {
+    box.remove();
+    showComposer(true);
+    wrapUpLink.hidden = false;     // 언제든 정리할 수 있게 입력칸 위에 작은 단추를 남긴다
+    messageBox.focus();
+  };
+  const buttons = el('div', 'buttons');
+  buttons.append(yes, more);
+  box.append(el('p', 'question', '오늘 묵상을 정리해 드릴까요?'), buttons);
+  thread.append(box);
+  box.scrollIntoView({ block: 'end', behavior: 'smooth' });
+}
+
+/* 화면에 보이는 기록 글을 다시 글자로 옮긴다. 목록은 "- "와 "1. "를 붙여 원래 모양으로 되돌린다. */
+function readBody(node) {
+  if (!node.children.length) return node.innerText.trim();
+  const lines = [];
+  for (const child of node.children) {
+    if (child.tagName === 'UL' || child.tagName === 'OL') {
+      [...child.children].forEach((item, i) => {
+        const text = item.innerText.trim();
+        if (text) lines.push((child.tagName === 'OL' ? `${(child.start || 1) + i}. ` : '- ') + text);
+      });
+    } else if (child.innerText.trim()) {
+      lines.push(child.innerText.trim());
+    }
+  }
+  return lines.join('\n');
+}
+
+function recordCard(record, past) {
+  const card = el('section', 'record');
+  card.append(el('p', 'eyebrow', '오늘의 묵상 기록'), el('h2', '', record.passage));
+  const fields = {};
+  const subtitle = el('p', 'subtitle', `${record.date ? dateText(record.date) : todayText} · `);
+  fields.title = el('span', '', record.title);
+  subtitle.append(fields.title);
+  card.append(subtitle);
+
+  let blankPrayer = null;    // 마침기도 없이 정리한 새 기록: 고칠 때 그 칸을 열어 기도를 적게 한다
+  for (const [key, label] of RECORD_SECTIONS) {
+    const blank = !record[key];
+    if (blank && !(key === 'closing_prayer' && !past)) continue;   // 지난 기록에서는 빈 칸을 두지 않는다
+    if (key === 'applied_truth' && !hasOwnAppliedTruth(record)) continue;
+    const part = el('div', 'part' + (key === 'truth' ? ' truth' : ''));
+    const body = el('div', 'body' + (OWN_WORDS.includes(key) ? ' own' : ''));
+    if (blank) {
+      body.dataset.hint = '마침 기도를 적어 주세요.';
+      part.hidden = true;
+      blankPrayer = part;
+    } else {
+      renderBlock(body, record[key]);        // "- "와 "1. "로 시작하는 줄은 목록으로 보여 준다
+    }
+    fields[key] = body;
+    part.append(el('h3', '', label), body);
+    card.append(part);
+  }
+
+  if (past) {      // 지난 묵상: 읽기만 한다. 글 파일로 받거나 지울 수 있다
+    const tools = el('div', 'confirm');
+    const file = el('button', 'quiet', '글 파일로 받기'); file.type = 'button';
+    file.onclick = () => downloadText(`${record.passage} 묵상 정리.txt`.replace(/[:/]/g, '-'), recordAsText(record));
+    const remove = el('button', 'quiet', '이 기록 지우기'); remove.type = 'button';
+    remove.onclick = async () => {
+      if (!window.confirm(`${record.passage} 묵상 기록을 지울까요?`)) return;
+      if (record._owner && account) {
+        try { await send_('DELETE', `/api/diary/records/${record.id}`); }
+        catch (e) { if (e.status !== 404) { window.alert(`지우지 못했습니다. ${e.message}`); return; } }
+      }
+      records = records.filter(r => r !== record);
+      store.only('records', records);
+      renderHome(); show('home');
+    };
+    const row = el('div', 'buttons'); row.append(file, remove);
+    tools.append(row);
+    card.append(tools);
+    return card;
+  }
+
+  const confirm = el('div', 'confirm');
+  const question = el('p', 'question', '이대로 저장할까요?');
+  const save = el('button', '', '저장해 주세요');
+  const edit = el('button', 'quiet', '고칠 곳이 있어요');
+  save.type = edit.type = 'button';
+  const buttons = el('div', 'buttons');
+  buttons.append(save, edit);
+  confirm.append(question, buttons);
+  card.append(confirm);
+
+  let editing = false;
+  edit.onclick = () => {
+    editing = !editing;
+    for (const node of Object.values(fields)) {
+      node.contentEditable = editing ? 'true' : 'false';
+      node.classList.toggle('editing', editing);
+    }
+    edit.textContent = editing ? '다 고쳤어요' : '고칠 곳이 있어요';
+    question.textContent = editing ? '고칠 곳을 눌러 직접 고쳐 주세요.' : '이대로 저장할까요?';
+    save.disabled = editing;
+    if (blankPrayer) blankPrayer.hidden = !editing && !fields.closing_prayer.innerText.trim();
+    if (editing) (blankPrayer ? fields.closing_prayer : fields.prayer || Object.values(fields)[0]).focus();
+  };
+
+  save.onclick = async () => {
+    const finalRecord = { ...record };
+    for (const [key, node] of Object.entries(fields)) finalRecord[key] = readBody(node);
+    // 진리가 하나뿐이어서 적용 진리를 따로 보이지 않았으면, 고친 진리가 곧 적용 진리다
+    if (!fields.applied_truth) finalRecord.applied_truth = finalRecord.truth.replace(/^\s*(?:[-•]|\d+[.)])\s+/, '');
+    save.disabled = edit.disabled = true;
+    try {
+      // 일기장(DB) 저장이 연결되면 그쪽에도 저장한다. 그 전까지는 이 기기에 보관한다
+      if (typeof window.saveMeditationRecord === 'function') await window.saveMeditationRecord(finalRecord);
+      const { kept, uploaded, problem } = await keepRecord(finalRecord);
+      let finishedBook = null;      // 이 묵상으로 책을 끝까지 마쳤는가
+      try {
+        const after = await getJSON(`/api/meditation/following?book=${encodeURIComponent(finalRecord.book)}` +
+                                    `&chapter=${finalRecord.chapter_end}&verse=${finalRecord.verse_end}`);
+        if (after.finished) finishedBook = after.book;
+      } catch (e) {}
+      shown = new Date(); shown.setDate(1);
+      const saidSaved = !account ? `${finalRecord.passage} 묵상을 저장했습니다.` : uploaded ? `${finalRecord.passage} 묵상을 일기장에 적었습니다.`
+        : `일기장에 올리지 못해 이 기기에 보관했습니다. ${problem}`;
+      renderHome(kept || uploaded ? saidSaved : '이 브라우저에는 보관하지 못했습니다. 묵상 정리를 글 파일로 받아 두세요.', finishedBook);
+      if (kept || uploaded) {
+        show('home');        // 달력으로 돌아와 잎이 돋은 오늘과 '오늘 묵상을 마쳤습니다'를 보고, 책 덮기로 나간다
+      }
+      else { question.textContent = '이 브라우저에는 보관하지 못했습니다.'; downloadText(`${finalRecord.passage} 묵상 정리.txt`.replace(/[:/]/g, '-'), recordAsText(finalRecord)); }
+    } catch (e) {
+      question.textContent = `저장하지 못했습니다. ${e.message || ''}`.trim();
+      save.disabled = edit.disabled = false;
+    }
+  };
+  return card;
+}
+
+async function showRecord() {
+  showComposer(false);
+  wrapUpLink.hidden = true;
+  const waiting = waitingMark('묵상 기록을 정리하고 있습니다');
+  thread.append(waiting);
+  waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  try {
+    const record = await withSession(() => api('/api/meditation/record', { session_id: sessionId }));
+    const card = recordCard(record);
+    waiting.replaceWith(card);
+    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  } catch (e) {
+    const failed = el('div', 'failed');
+    failed.setAttribute('role', 'alert');
+    const retry = el('button', '', '다시 정리하기');
+    retry.type = 'button';
+    retry.onclick = () => { failed.remove(); showRecord(); };
+    const back = el('button', 'quiet', '묵상으로 돌아가기');
+    back.type = 'button';
+    back.onclick = () => { failed.remove(); showComposer(true); wrapUpLink.hidden = false; };
+    const buttons = el('div', 'buttons');
+    buttons.append(retry, back);
+    failed.append(el('p', '', `묵상 기록을 받지 못했습니다. ${e.message}`), buttons);
+    waiting.replaceWith(failed);
+  }
+}
+
+/* 본문이 정해졌다. 처음 묵상하는 사람은 달력으로 돌아가 오늘을 눌러 들어가고, 그 밖에는 바로 묵상한다 */
+async function passageChosen(ref, mode) {
+  if (!planning) { await beginMeditation(ref, mode); return; }
+  const data = await getJSON(`/api/meditation/passage?ref=${encodeURIComponent(ref)}`);    // 없는 본문이면 여기서 알린다
+  planned = { ref: data.passage, mode };
+  store.write('planned', planned);
+  planning = false;
+  renderHome();
+  show('home');
+}
+
+/* ---- 묵상 시작: 정한 본문으로 새 묵상을 연다 ---- */
+async function beginMeditation(ref, mode) {
+  const data = await api('/api/meditation/start', { ref });
+  sessionId = data.session_id;
+  passage = { reference: data.passage, verses: data.verses, missing: data.missing };
+  currentMode = mode;
+  planned = null; store.write('planned', null);
+  draft = { date: todayKey, ref: data.passage, mode, messages: [] };
+  askedToWrapUp = false;
+  sentCount = 0;
+  wrapUpLink.hidden = true;
+  thread.replaceChildren();
+  messageBox.value = '';
+  show('thread');
+  composer.hidden = false;
+  if (!data.opening) { send(null); return; }       // 첫 말을 정해 두지 않은 예전 서버
+  // 첫 말은 정해 둔 한 문장이다. 기다리지 않고 바로 보이고, 묵상자는 기도부터 적는다
+  draft.messages.push({ role: 'assistant', content: data.opening });
+  store.write('draft', draft);
+  thread.append(renderGuide(data.opening));
+  setBusy(false);
+  messageBox.focus({ preventScroll: true });
+}
+
+/* ---- 이어서 하기: 멈췄던 묵상의 대화를 화면에 되살리고, 인도자가 멈춘 곳에서 이어 간다 ---- */
+async function resumeMeditation() {
+  const data = await api('/api/meditation/resume', { ref: draft.ref, messages: draft.messages });
+  sessionId = data.session_id;
+  passage = { reference: data.passage, verses: data.verses, missing: data.missing };
+  currentMode = draft.mode;
+  askedToWrapUp = false;
+  thread.replaceChildren();
+  sentCount = 0;
+  for (const message of draft.messages) {
+    if (message.hidden) thread.append(el('p', 'pause', '잠시 멈추었다가 이어서'));
+    else if (message.role === 'user') { thread.append(el('p', 'entry', message.content)); sentCount += 1; }
+    else thread.append(renderGuide(message.content));
+  }
+  thread.append(el('p', 'pause', '잠시 멈추었다가 이어서'));
+  wrapUpLink.hidden = sentCount < 6;
+  messageBox.value = '';
+  show('thread');
+  composer.hidden = false;
+  send(null, true);
+}
+
+function discardDraft() { draft = null; store.write('draft', null); }
+
+/* ---- 본문 칸: 하나의 칸에 딱 두 가지를 적는다 ----
+   "에베소서 1:1-2" 또는 "골로새서 3:18-4:1"   시작 절과 끝 절까지 적은 본문으로 묵상한다
+   "이어서 묵상"                               하던 책의 다음 단락으로 바로 묵상한다 */
+const CONTINUE_WORDS = /^(이어서|이어|계속|다음)/;
+const HOW_TO_WRITE = '본문을 시작 절과 끝 절까지 적어 주세요. 예: 에베소서 1:1-2, 골로새서 3:18-4:1';
+
+/* 적은 글이 본문인지 가려낸다: 책 이름 뒤에 장:절-절 또는 장:절-장:절이 오고, 그 밖의 말이 없어야 한다 */
+const REFERENCE = /^\S.{0,12}?\s*\d+\s*[:장]\s*\d+\s*절?\s*[-~–—]\s*(\d+\s*[:장]\s*)?\d+\s*절?$/;
+
+async function submitPassage(typed, notice, button) {
+  typed = typed.trim();
+  if (!typed) return;
+  notice.textContent = '';
+  button.disabled = true;
+  try {
+    const squeezed = typed.replace(/\s/g, '');
+    if (REFERENCE.test(typed)) {
+      await passageChosen(typed, 'typed');                        // 본문
+    } else if (!/\d/.test(typed) && squeezed.length <= 12 && CONTINUE_WORDS.test(squeezed)) {
+      await continueNext();                                       // 이어서 묵상
+    } else {
+      notice.textContent = HOW_TO_WRITE;
+    }
+  } catch (e) {
+    if (currentView !== 'entry') openEntry();
+    (document.querySelector('#entry-form .form-notice') || notice).textContent = e.message;
+  }
+  button.disabled = false;
+}
+
+/* "이어서 묵상": 하던 책의 다음 절부터 한 단락을 골라 바로 묵상을 시작한다 */
+async function continueNext() {
+  if (!progress) { openEntry('묵상할 본문을 적거나 아래에서 고르세요.'); return; }
+  homeStatus.textContent = '다음 단락을 찾고 있습니다…';
+  const where = `book=${encodeURIComponent(progress.book)}&chapter=${progress.chapter}&verse=${progress.verse}`;
+  const data = await getJSON(`/api/meditation/following?${where}`);
+  if (data.finished) { openEntry(`${data.book} 묵상을 끝까지 마쳤습니다. 다음에 묵상할 책을 골라 주세요.`); return; }
+  let hint = { end: null };
+  try { hint = await getJSON(`/api/meditation/suggest?${where}`); } catch (e) {}
+  const first = data.verses[0];
+  const last = data.verses.find(v => v.chapter === hint.chapter && v.end === hint.end);
+  if (!last) {            // 단락의 끝을 정하지 못했다: 어디서 이어지는지 알려 주고 끝 절을 적게 한다
+    const from = `${data.book} ${first.chapter}:${first.start}`;
+    openEntry(`${from}부터 이어집니다. 끝 절까지 적어 주세요.`);
+    document.getElementById('ref').value = from + '-';
+    return;
+  }
+  const ref = first.chapter === last.chapter
+    ? `${data.book} ${first.chapter}:${first.start}` + (first.start === last.end ? '' : `-${last.end}`)
+    : `${data.book} ${first.chapter}:${first.start}-${last.chapter}:${last.end}`;
+  await beginMeditation(ref, 'continue');
+}
+
+/* 오늘 날짜를 누르면: 하던 묵상이 있으면 이어서, 없으면 다음 단락으로, 처음이면 본문을 적는다 */
+let starting = false;
+async function startToday() {
+  if (starting) return;
+  starting = true;
+  try {
+    if (draft) await resumeMeditation();
+    else if (planned) await beginMeditation(planned.ref, planned.mode);
+    else await continueNext();
+  } catch (e) {
+    renderHome(`시작하지 못했습니다. ${e.message}`);
+  }
+  starting = false;
+}
+
+/* 본문 적는 쪽을 연다. viaCalendar: 적고 나면 달력으로 돌아가 오늘을 눌러 들어간다 */
+function openEntry(lead, viaCalendar = false) {
+  planning = viaCalendar;
+  document.getElementById('entry-lead').textContent = lead || '오늘 묵상할 본문을 적어 주세요. 계속 본문을 이어 간다면 아래의 단락을 선택하세요.';
+  document.getElementById('entry-form').replaceChildren(passageForm());
+  showBrowse();
+  show('entry');
+  document.getElementById('ref').focus({ preventScroll: true });
+}
+
+/* 본문을 적는 칸 */
+function passageForm() {
+  const form = document.createElement('form');
+  form.className = 'passage-form';
+  const input = document.createElement('input');
+  input.id = 'ref'; input.autocomplete = 'off'; input.required = true;
+  input.placeholder = '골로새서 3:18-4:1';
+  input.setAttribute('aria-label', '묵상할 본문');
+  const button = el('button', '', '묵상하기'); button.type = 'submit';
+  const row = el('div', 'row'); row.append(input, button);
+  const notice = el('p', 'notice form-notice'); notice.setAttribute('role', 'alert');
+  const example = el('p', 'hint example',
+    '예: 에베소서 1:1-2, 골로새서 3:18-4:1');
+  form.append(row, example, notice);
+  form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value, notice, button); });
+  return form;
+}
+
+/* ---- 책과 단락 펼치기: 본문 칸 아래에 둔다 ----
+   묵상 중인 책이 있고 그 책의 단락이 준비되어 있으면 단락 목록을, 아니면 책 목록을 보인다.
+   단락을 누르는 것은 그 장절을 본문 칸에 적는 것과 같다. 단락에는 제목을 붙이지 않는다 (장절만) */
+const browseBox = document.getElementById('entry-browse');
+let bookList = null;
+
+async function showBrowse(book) {
+  browseBox.replaceChildren();
+  const latest = [...records].filter(r => r.book).sort((a, b) => (a.date + a.meditation_time).localeCompare(b.date + b.meditation_time)).pop();
+  const current = book || (progress && progress.book) || (latest && latest.book);      // 책갈피가 없으면 가장 최근에 묵상한 책
+  if (current) {
+    try { if (await showParagraphs(current, !book)) return; }
+    catch (e) { if (book) { browseBox.replaceChildren(el('p', 'hint', e.message)); return; } }     // 단락이 없는 책: 책 목록으로
+  }
+  await showBooks();
+}
+
+function browseHead(title, linkText, action) {
+  const head = el('div', 'browse-head');
+  head.append(el('h3', '', title));
+  if (linkText) { const b = el('button', 'link', linkText); b.type = 'button'; b.onclick = action; head.append(b); }
+  return head;
+}
+
+async function showBooks() {
+  if (!bookList) {
+    try { bookList = (await getJSON('/api/meditation/books')).books; }
+    catch (e) { return; }               // 책 목록을 받지 못해도 본문 칸으로 묵상할 수 있다
+  }
+  const meditated = new Set(records.map(r => r.book));
+  browseBox.replaceChildren(browseHead('책에서 고르기'));
+  for (const testament of ['구약', '신약']) {
+    browseBox.append(el('p', 'testament', testament));
+    const grid = el('div', 'books');
+    for (const book of bookList.filter(b => b.testament === testament)) {
+      const button = el('button', book.paragraphs ? 'ready' : '', book.name);
+      button.type = 'button';
+      if (meditated.has(book.name)) button.append(leaf(false));
+      button.onclick = () => book.paragraphs ? showBrowse(book.name)
+        : browseBox.replaceChildren(browseHead(book.name, '다른 책 고르기', showBooks),
+            el('p', 'hint', `${book.name}${eun(book.name)} 아직 단락을 나누지 않았습니다. 위 칸에 본문을 적어 주세요. 예: ${book.name} 1:1-5`));
+      grid.append(button);
+    }
+    browseBox.append(grid);
+  }
+}
+
+const CURRENT_PASS_DAYS = 90;
+function daysBetween(a, b) {
+  const t = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+  return Math.round(Math.abs(t(b) - t(a)) / 86400000);
+}
+function rangeOf(r) { return [[r.chapter_start, r.verse_start], [r.chapter_end, r.verse_end]]; }
+function before(a, b) { return a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]); }
+function overlaps(a, b) { return !before(a[1], b[0]) && !before(b[1], a[0]); }
+
+/* 긴 단락 (30절이 넘는 것): 한 번에 묵상할 수 없으므로 본문을 펼쳐 읽게 하고,
+   묵상자가 읽은 뒤 묵상할 부분을 위 칸에 직접 적는다 */
+const LONG_PARAGRAPH = 30;
+async function showLongParagraph(book, p) {
+  const input = document.getElementById('ref');
+  input.value = `${book} ${p.chapter_start}:${p.verse_start}-`;
+  const back = () => showParagraphs(book);
+  browseBox.replaceChildren(browseHead(p.ref, '목록으로', back),
+    el('p', 'hint', `${p.verses}절의 긴 단락입니다. 한 번에 ${LONG_PARAGRAPH}절까지 묵상할 수 있으니, 읽고 나서 오늘 묵상할 부분을 위 칸에 끝 절까지 적어 주세요.`),
+    el('p', 'waiting', '•••'));
+  let data;
+  try { data = await getJSON(`/api/meditation/read?ref=${encodeURIComponent(p.ref)}`); }
+  catch (e) { browseBox.lastChild.replaceWith(el('p', 'notice', e.message)); return; }
+  const text = el('div', 'long-read');
+  for (const v of data.verses) {
+    const line = el('p');
+    line.append(el('span', 'num', `${v.chapter}:${v.label}`), document.createTextNode(' ' + v.text));
+    text.append(line);
+  }
+  const write = el('button', '', '위 칸에 적기'); write.type = 'button';
+  write.onclick = () => {             // 칸으로 올라가 끝 절 자리에 글쇠를 둔다
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  };
+  const backLink = el('button', 'link', '목록으로'); backLink.type = 'button'; backLink.onclick = back;
+  browseBox.lastChild.replaceWith(text);
+  browseBox.append(write, backLink);
+}
+
+function eun(word) { const code = word.charCodeAt(word.length - 1) - 0xAC00; return code >= 0 && code <= 11171 && code % 28 ? '은' : '는'; }
+
+/* 단락 목록을 펼친다. auto: 묵상자가 고르지 않고 저절로 연 경우. 그 책을 다 마쳤으면 false를 돌려 책 목록으로 넘긴다 */
+async function showParagraphs(book, auto = false) {
+  const data = await getJSON(`/api/meditation/paragraphs?book=${encodeURIComponent(book)}`);
+  // 이번에 이 책을 읽어 가는 묵상만 본다: 이 책의 가장 최근 묵상에서 석 달 안의 것.
+  // 몇 해 전에 같은 책을 묵상한 기록은 달력, 책별 진리와 적용, 한 해의 묵상에서 본다
+  const all = records.filter(r => r.book === data.book && r.chapter_start);
+  const latest = all.map(r => r.date).sort().pop();
+  const mine = latest ? all.filter(r => daysBetween(r.date, latest) <= CURRENT_PASS_DAYS) : [];
+  let here = progress && progress.book === data.book ? [progress.chapter, progress.verse] : null;
+  if (!here && mine.length) {         // 책갈피가 없으면 이 책에서 묵상이 가장 멀리 간 자리
+    here = mine.map(r => [r.chapter_end, r.verse_end]).reduce((a, b) => before(a, b) ? b : a);
+  }
+  // 다음 단락: 묵상한 자리 바로 다음 절이 든 단락. 단락의 가운데까지 했으면 남은 부분부터
+  let nextIndex = -1, nextStart = null;
+  if (here) {
+    nextIndex = data.paragraphs.findIndex(p => before(here, [p.chapter_end, p.verse_end]));
+    if (nextIndex >= 0) {
+      const p = data.paragraphs[nextIndex];
+      nextStart = before(here, [p.chapter_start, p.verse_start]) ? null : [here[0], here[1] + 1];
+    }
+  } else if (!mine.length) nextIndex = 0;
+  if (auto && here && nextIndex < 0) return false;
+  const list = el('ul', 'paragraphs');
+  data.paragraphs.forEach((p, i) => {
+    let ref = p.ref;
+    if (i === nextIndex && nextStart && nextStart[0] === p.chapter_end && nextStart[1] <= p.verse_end) {
+      ref = `${data.book} ${nextStart[0]}:${nextStart[1]}-${p.verse_end}`;      // 같은 장 안에서 남은 부분
+    }
+    const item = el('li', i === nextIndex ? 'is-next' : '');
+    const button = el('button'); button.type = 'button';
+    button.append(el('span', 'ref', ref.slice(data.book.length + 1)));
+    // 묵상한 단락: 잎과 그날 묵상의 제목 (날짜는 달력에서 보므로 여기서는 제목만)
+    const met = mine.filter(r => overlaps(rangeOf(r), rangeOf(p)))
+      .sort((a, b) => (a.date + a.meditation_time).localeCompare(b.date + b.meditation_time));
+    if (met.length) {
+      const done = el('span', 'done'); done.append(leaf(false));
+      const titles = [...new Set(met.map(r => (r.title || '').trim()).filter(Boolean))];
+      if (titles.length) done.append(el('span', 'title', titles.join(' · ')));
+      button.append(done);
+    }
+    if (p.verses > LONG_PARAGRAPH && ref === p.ref) button.append(el('span', 'count', `${p.verses}절`));
+    if (i === nextIndex) button.append(el('span', 'next', '다음'));
+    button.onclick = () => {           // 고른 단락을 위 칸에 넣는다. 묵상은 "묵상하기"로 시작한다
+      if (p.verses > LONG_PARAGRAPH && ref === p.ref) { showLongParagraph(data.book, p); return; }
+      const input = document.getElementById('ref');
+      input.value = ref;
+      list.querySelectorAll('li.chosen').forEach(li => li.classList.remove('chosen'));
+      item.classList.add('chosen');
+      const notice = document.querySelector('#entry-form .form-notice');
+      if (notice) notice.textContent = '';
+      input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    item.append(button);
+    list.append(item);
+  });
+  browseBox.replaceChildren(browseHead(data.book, '다른 책 고르기', showBooks), list);
+  // 목록은 한 줄에 하나씩. 목록 안에서 오늘 고를 단락까지 올라가 멈춘다 (바로 앞 단락이 조금 보이게)
+  const target = list.querySelector('li.is-next') || list.querySelector('li.chosen');
+  if (target) requestAnimationFrame(() => {
+    const previous = target.previousElementSibling;
+    list.scrollTop = Math.max(0, target.offsetTop - (previous ? previous.offsetHeight * 0.6 : 0));   // 목록이 기준 상자이므로 offsetTop은 목록 안의 자리
+  });
+  if (nextIndex < 0 && here) browseBox.insertBefore(el('p', 'hint', `${data.book} 묵상을 끝까지 마쳤습니다.`), list);
+  return true;
+}
+
+/* ---- 달력 ---- */
+const calendar = document.getElementById('calendar');
+const monthTitle = document.getElementById('month-title');
+const homeStatus = document.getElementById('home-status');
+const homeLinks = document.getElementById('home-links');
+const homeAction = document.getElementById('home-action');
+const homeNote = document.getElementById('home-note');
+const homeExtra = document.getElementById('home-extra');
+let shown = new Date(); shown.setDate(1);
+
+function recordsOn(key) { return records.filter(r => r.date === key); }
+
+/* 묵상한 날의 표식: 잎 하나 */
+const LEAF = '<path d="M12 2.5c4.6 3.4 6.4 7.4 5.4 11.4-.7 2.9-2.7 4.9-5.4 6.1-2.7-1.2-4.7-3.2-5.4-6.1C5.6 9.9 7.4 5.9 12 2.5Z" fill="currentColor"/>' +
+             '<path d="M12 7v14.5" stroke="var(--paper)" stroke-width="1.2" stroke-linecap="round"/>';
+const LEAF_OPEN = '<path d="M12 3.6c4 3.1 5.5 6.6 4.6 10.1-.6 2.5-2.3 4.3-4.6 5.4-2.3-1.1-4-2.9-4.6-5.4C6.5 10.2 8 6.7 12 3.6Z" fill="none" stroke="currentColor" stroke-width="1.5"/>';
+function leaf(paused) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', 'leaf' + (paused ? ' paused' : ''));
+  svg.innerHTML = paused ? LEAF_OPEN : LEAF;
+  return svg;
+}
+
+function renderHome(notice, finishedBook) {
+  const year = shown.getFullYear(), month = shown.getMonth();
+  monthTitle.textContent = `${year}년 ${month + 1}월`;
+  calendar.replaceChildren();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
+  for (let i = 0; i < firstWeekday; i++) calendar.append(el('span', 'day blank'));
+  for (let d = 1; d <= days; d++) {
+    const key = `${year}-${pad(month + 1)}-${pad(d)}`;
+    const done = recordsOn(key);
+    const pausedHere = key === todayKey && draft && !done.length;
+    const cell = el('button', 'day' + (done.length ? ' done' : '') + (key === todayKey ? ' today' : ''));
+    cell.type = 'button';
+    cell.append(el('span', 'number', String(d)));
+    if (done.length) cell.append(leaf(false));       // 달력에는 표식만 둔다. 본문은 눌러서 본다
+    else if (pausedHere) cell.append(leaf(true));
+    cell.setAttribute('aria-label', dateText(key) + (done.length ? `, ${done[done.length - 1].passage} 묵상함` : pausedHere ? ', 묵상 중' : key === todayKey ? ', 오늘' : ''));
+    if (key === todayKey && (draft || planned || !done.length)) cell.onclick = startToday;
+    else if (done.length) cell.onclick = () => showPast(key);
+    else cell.disabled = true;
+    calendar.append(cell);
+  }
+
+  /* 달력 아래: 오늘을 누르면 무엇이 열리는지 한 줄로 알려 준다 */
+  const today = recordsOn(todayKey);
+  const leaving = today.length && !draft && !planned;     // 오늘 묵상을 마치고 돌아왔다: 나가는 길을 안내한다
+  homeStatus.className = 'home-status' + (notice && !leaving ? ' notice-line' : '');
+  homeNote.textContent = leaving && notice ? notice : '';
+  if (leaving) homeStatus.textContent = '오늘 묵상을 마쳤습니다.';
+  else if (notice) homeStatus.textContent = notice;
+  else if (draft) homeStatus.textContent = `오늘을 누르면 ${draft.ref} 묵상을 이어서 합니다.`;
+  else if (planned) homeStatus.textContent = `오늘을 누르면 ${planned.ref} 묵상을 시작합니다.`;
+  else if (today.length) homeStatus.textContent = '오늘 묵상을 마쳤습니다.';
+  else if (progress) homeStatus.textContent = `오늘을 누르면 ${progress.book} ${progress.chapter}:${progress.verse} 다음부터 묵상합니다.`;
+  else homeStatus.textContent = '오늘을 눌러 묵상을 시작하세요.';
+
+  homeLinks.replaceChildren();
+  homeAction.replaceChildren();
+  if (leaving) {                                // 나올 때: 책 덮기가 출구
+    const close = el('button', '', '책 덮기'); close.type = 'button';
+    close.onclick = () => { renderHome(); show('home'); closeBook(''); };
+    homeAction.append(close);
+  } else if (progress || draft || planned) {    // 들어갈 때: 본문을 정한다. 할 일은 메뉴와 떨어진 단추로
+    const other = el('button', 'quiet', '다른 본문으로 묵상하기'); other.type = 'button';
+    other.onclick = () => {
+      if (draft && !window.confirm(`하던 ${draft.ref} 묵상을 지우고 다른 본문으로 시작할까요?`)) return;
+      if (draft) discardDraft();
+      planned = null; store.write('planned', null);
+      openEntry();
+    };
+    homeAction.append(other);
+  }
+  const link = (text, action) => { const b = el('button', 'link', text); b.type = 'button'; b.onclick = action; homeLinks.append(b); };
+  link('안내 보기', () => show('guide'));
+  if (account) link('파일에서 가져오기', () => importInput.click());
+  if (!leaving) link('책 덮기', () => { renderHome(); show('home'); closeBook(''); });
+
+  homeExtra.replaceChildren();
+  if (finishedBook) homeExtra.append(el('p', 'home-status', `${finishedBook} 묵상을 끝까지 마쳤습니다.`));
+  if (account && unsaved().length) homeExtra.append(moveBox());
+  // 로그아웃은 책을 덮은 뒤 뒷면 아래에서 묻는다
+}
+
+/* ---- 파일에서 묵상 가져오기: 다른 곳에 정리해 두었던 묵상을 기록 모양으로 만든 파일(.json)을 읽는다 ----
+   읽은 묵상은 "이 기기에만 있는 묵상"으로 두고, 옮기기 상자에서 확인한 뒤 일기장으로 옮긴다 (올리는 길은 하나뿐이다) */
+const importInput = document.createElement('input');
+importInput.type = 'file'; importInput.accept = '.json,application/json'; importInput.hidden = true;
+document.body.append(importInput);
+importInput.onchange = async () => {
+  const file = importInput.files[0];
+  importInput.value = '';
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch (e) { renderHome('파일을 읽지 못했습니다. 묵상 가져오기용 파일인지 확인해 주세요.'); return; }
+  if (!data || data.kind !== 'diary-with-jesus-import' || !Array.isArray(data.records)) {
+    renderHome('묵상 가져오기용 파일이 아닙니다.'); return;
+  }
+  const have = new Set(records.map(r => r.id));
+  const seen = new Set(records.map(r => `${r.date}|${r.passage}`));
+  let added = 0, skipped = 0, wrong = 0;
+  for (const item of data.records) {
+    const record = item && item.record;
+    const ok = item && /^[a-z0-9]{8,40}$/.test(item.id || '') && record && typeof record === 'object' &&
+      RECORD_FIELDS.every(field => field in record) && /^\d{4}-\d\d-\d\d$/.test(record.date) && record.passage;
+    if (!ok) { wrong += 1; continue; }
+    if (have.has(item.id) || seen.has(`${record.date}|${record.passage}`)) { skipped += 1; continue; }
+    const copy = { id: item.id };
+    for (const field of RECORD_FIELDS) copy[field] = record[field];
+    records.push(copy); have.add(item.id); seen.add(`${record.date}|${record.passage}`); added += 1;
+  }
+  sortRecords();
+  store.only('records', records);
+  const notes = [`파일에서 묵상 ${added}개를 읽었습니다.`];
+  if (skipped) notes.push(`이미 있는 ${skipped}개는 건너뛰었습니다.`);
+  if (wrong) notes.push(`모양이 맞지 않는 ${wrong}개는 읽지 않았습니다.`);
+  if (added) notes.push('아래 목록을 확인하고 일기장으로 옮겨 주세요.');
+  renderHome(notes.join(' '));
+};
+
+/* 이 기기에만 있는 묵상을 일기장으로 옮기자고 청하는 상자 */
+function moveBox() {
+  const waiting = unsaved();
+  const box = el('div', 'move-box');
+  const status = el('p', '', `이 기기에만 있는 묵상이 ${waiting.length}개 있습니다. 일기장으로 옮길까요?`);
+  const list = document.createElement('ul');
+  for (const record of waiting.slice(0, 20)) list.append(el('li', '', `${dateText(record.date)} ${record.passage}`));
+  if (waiting.length > 20) list.append(el('li', '', `그 밖에 ${waiting.length - 20}개`));
+  const go = el('button', '', '일기장으로 옮기기'); go.type = 'button';
+  go.onclick = async () => {
+    go.disabled = true;
+    const { moved, failed } = await moveToDiary(status);
+    renderHome(failed.length ? '' : `묵상 ${moved}개를 일기장으로 옮기고, 다시 읽어 확인했습니다.`);
+    if (failed.length) {
+      const again = document.querySelector('.move-box p');
+      if (again) again.textContent = `${moved}개를 옮겼고, ${failed.length}개는 옮기지 못했습니다. ${failed[0]}`;
+    }
+  };
+  box.append(status, list, go, el('p', 'hint', '옮기기 전의 모습을 이 기기에 한 벌 따로 남겨 둡니다.'));
+  return box;
+}
+
+async function startOrResume() { await startToday(); }
+
+document.getElementById('prev-month').onclick = () => { shown.setMonth(shown.getMonth() - 1); renderHome(); };
+document.getElementById('next-month').onclick = () => { shown.setMonth(shown.getMonth() + 1); renderHome(); };
+goHome.onclick = () => {
+  if (backTo === 'review' && currentView !== 'thread') { openReview(); return; }
+  const paused = currentView === 'thread' && draft && draft.messages.length;
+  shown = new Date(); shown.setDate(1);
+  renderHome(paused ? '묵상을 보관했습니다. 언제든 이어서 할 수 있습니다.' : '');
+  show('home');
+};
+
+/* ---- 기록 찾기: 저장한 묵상에서 낱말로 찾는다 ---- */
+const SEARCH_FIELDS = [['passage', '본문'], ['title', '제목'], ['applied_truth', '적용 진리'], ['truth', '진리'],
+  ['application', '적용'], ['observation', '관찰'], ['interpretation', '해석'], ['background', '배경'],
+  ['prayer', '시작 기도'], ['closing_prayer', '기도']];
+const searchBox = document.getElementById('search-box');
+
+function recordRow(record, detail, shortDate) {      // 목록의 한 줄. 누르면 그날의 묵상 정리가 열린다
+  const row = el('button', 'row-item'); row.type = 'button';
+  const when = shortDate ? `${Number(record.date.slice(5, 7))}월 ${Number(record.date.slice(8))}일` : dateText(record.date);
+  row.append(el('span', 'when', when), el('span', 'what', record.passage));
+  if (detail) row.append(el('span', 'detail', detail));
+  row.onclick = () => showPast(record.date);
+  return row;
+}
+
+function renderSearch() {
+  const word = searchBox.value.trim();
+  const results = document.getElementById('search-results');
+  results.replaceChildren();
+  const newest = [...records].sort((a, b) => (b.date + b.meditation_time).localeCompare(a.date + a.meditation_time));
+  let found = 0;
+  for (const record of newest) {
+    let detail = record.title || '';
+    if (word) {
+      const hit = SEARCH_FIELDS.find(([key]) => (record[key] || '').includes(word));
+      if (!hit) continue;
+      const text = record[hit[0]].replace(/\s+/g, ' ');
+      const at = text.indexOf(word);
+      detail = `${hit[1]}: ${at > 18 ? '…' : ''}${text.slice(Math.max(0, at - 18), at + word.length + 30)}${text.length > at + word.length + 30 ? '…' : ''}`;
+    }
+    results.append(recordRow(record, detail));
+    found += 1;
+  }
+  document.getElementById('search-count').textContent = !records.length ? '아직 저장한 묵상이 없습니다.'
+    : word ? `"${word}" 낱말이 들어 있는 묵상 ${found}개` : `저장한 묵상 ${found}개`;
+}
+searchBox.addEventListener('input', renderSearch);
+
+
+/* ---- 책별 정리: 한 책에서 찾은 진리와 요약을 본문 순서대로 모아 본다 ---- */
+function byPassage(a, b) {
+  return a.chapter_start - b.chapter_start || a.verse_start - b.verse_start || a.date.localeCompare(b.date);
+}
+
+/* 끝까지 마친 책: 그 책의 마지막 절까지 묵상한 기록이 있는 책 */
+async function finishedBooks() {
+  if (!bookList) {
+    try { bookList = (await getJSON('/api/meditation/books')).books; }
+    catch (e) { return null; }
+  }
+  return bookList.filter(b => records.some(r => r.book === b.name && r.chapter_end === b.last_chapter && r.verse_end === b.last_verse))
+    .map(b => b.name);
+}
+
+async function openBooks() {
+  const box = views.books;
+  box.replaceChildren(el('h2', 'view-title', '책별 진리와 적용'));
+  show('books');
+  const finished = await finishedBooks();
+  if (finished === null) { box.append(el('p', 'notice', '책 목록을 받지 못했습니다. 잠시 뒤 다시 열어 주세요.')); return; }
+  // 마친 날이 늦은 책이 위로
+  const endOf = name => records.filter(r => r.book === name).map(r => r.date).sort().pop();
+  const names = finished.sort((a, b) => endOf(b).localeCompare(endOf(a)));
+  if (!names.length) box.append(el('p', 'hint', '끝까지 마친 책이 아직 없습니다. 한 책을 마치면 여기에 모입니다.'));
+  for (const name of names) {
+    const mine = records.filter(r => r.book === name);
+    const dates = mine.map(r => r.date).sort();
+    const row = el('button', 'row-item'); row.type = 'button';
+    row.append(el('span', 'what', name),
+               el('span', 'detail', `${mine.length}번 묵상 · ${dateText(dates[0])}부터 ${dateText(dates[dates.length - 1])}까지`));
+    row.onclick = () => openBook(name);
+    box.append(row);
+  }
+}
+
+function openBook(name) { fillBook(views.books, name, false); show('books'); }
+
+/* inTalk: 비서와의 대화 안에 넣을 때 */
+function fillBook(box, name, inTalk) {
+  const mine = records.filter(r => r.book === name).sort(byPassage);
+  box.replaceChildren(el(inTalk ? 'h3' : 'h2', 'view-title', `${name}의 진리와 적용`));
+  if (!mine.length) { box.append(el('p', 'hint', '이 책의 묵상 기록이 이 기기에 없습니다.')); return; }
+  const dates = mine.map(r => r.date).sort();
+  box.append(el('p', 'hint', `${mine.length}번 묵상 · ${dateText(dates[0])}부터 ${dateText(dates[dates.length - 1])}까지`));
+  const lines = [`${name}에서 찾은 진리`, ''];
+  for (const record of mine) {
+    const part = el('article', 'truth-item');
+    const head = el('button', 'head'); head.type = 'button';
+    head.append(el('span', 'what', record.passage.slice(name.length).trim()), el('span', 'when', dateText(record.date)));
+    head.onclick = () => showPast(record.date);
+    const truth = el('div', 'body own');
+    renderBlock(truth, record.truth);
+    part.append(head);
+    if (record.title) part.append(el('p', 'title', record.title));
+    part.append(truth);
+    lines.push(`${record.passage} (${dateText(record.date)}) ${record.title || ''}`.trim(), record.truth);
+    if (hasOwnAppliedTruth(record)) {       // 여러 진리 가운데 적용하기로 고른 하나
+      const applied = el('p', 'applied');
+      applied.append(el('span', 'label', '적용 진리'), record.applied_truth);
+      part.append(applied);
+      lines.push(`적용 진리: ${record.applied_truth}`);
+    }
+    if (record.application) {
+      const application = el('div', 'application');
+      application.append(el('span', 'label', '적용'));
+      const body = el('div', 'body'); renderBlock(body, record.application);
+      application.append(body);
+      part.append(application);
+      lines.push('적용', record.application);
+    }
+    lines.push('');
+    box.append(part);
+  }
+  const file = el('button', 'quiet', '글 파일로 받기'); file.type = 'button';
+  file.onclick = () => downloadText(`${name}에서 찾은 진리.txt`, lines.join('\n'));
+  const row = el('div', 'buttons'); row.append(file);
+  if (!inTalk) {
+    const all = el('button', 'quiet', '마친 책 목록'); all.type = 'button'; all.onclick = openBooks;
+    row.append(all);
+  }
+  box.append(row);
+}
+
+/* ---- 한 해 돌아보기: 언제 어느 본문을 묵상했는가 ---- */
+let shownYear = new Date().getFullYear();
+
+function longestRun(keys) {       // 가장 길게 이어진 날 수
+  let best = 0, run = 0, previous = null;
+  for (const key of keys) {
+    const [y, m, d] = key.split('-').map(Number);
+    const day = Math.round(new Date(y, m - 1, d).getTime() / 86400000);
+    run = previous !== null && day - previous === 1 ? run + 1 : 1;
+    best = Math.max(best, run); previous = day;
+  }
+  return best;
+}
+
+function openYear() { fillSpan(views.year); show('year'); }
+
+/* 한 해의 묵상: 이번 달까지 열두 달. 책마다 한 줄, 묵상한 날마다 점 하나. 점이 이어지면 그 책을 이어서 묵상한 때다 */
+let spanEnd = new Date(); spanEnd.setDate(1);
+const DAY_MS = 86400000;
+function fillSpan(box) {
+  const end = new Date(spanEnd.getFullYear(), spanEnd.getMonth() + 1, 1);        // 끝 달의 다음 달 첫날
+  const start = new Date(spanEnd.getFullYear(), spanEnd.getMonth() - 11, 1);
+  const key = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const from = key(start), to = key(new Date(end.getTime() - DAY_MS));
+  const mine = records.filter(r => r.date >= from && r.date <= to).sort((a, b) => a.date.localeCompare(b.date));
+  const total = Math.round((end - start) / DAY_MS);
+  const at = date => { const [y, m, d] = date.split('-').map(Number); return Math.round((new Date(y, m - 1, d) - start) / DAY_MS); };
+
+  const bar = el('div', 'month-bar');
+  const prev = el('button', 'quiet', '‹'); prev.type = 'button'; prev.setAttribute('aria-label', '앞의 열두 달');
+  const next = el('button', 'quiet', '›'); next.type = 'button'; next.setAttribute('aria-label', '뒤의 열두 달');
+  prev.onclick = () => { spanEnd = new Date(spanEnd.getFullYear(), spanEnd.getMonth() - 12, 1); openYear(); };
+  next.onclick = () => { spanEnd = new Date(spanEnd.getFullYear(), spanEnd.getMonth() + 12, 1); openYear(); };
+  const title = `${start.getFullYear()}년 ${start.getMonth() + 1}월 – ${spanEnd.getFullYear()}년 ${spanEnd.getMonth() + 1}월`;
+  bar.append(prev, el('h2', 'span-title', title), next);
+  const books = [...new Set(mine.map(r => r.book))];
+  const stats = el('p', 'stats');
+  stats.append(el('strong', '', `${new Set(mine.map(r => r.date)).size}일`), ' 묵상 · ', el('strong', '', `${books.length}권`));
+  box.replaceChildren(el('h2', 'view-title', '한 해의 묵상'), bar, stats);
+  if (!mine.length) { box.append(el('p', 'hint', '이 열두 달 동안 저장한 묵상이 없습니다.')); return; }
+
+  const chart = el('div', 'span-chart');
+  chart.setAttribute('role', 'img');
+  chart.setAttribute('aria-label', `${title} 동안 묵상한 책: ` + books.map(b => {
+    const ds = mine.filter(r => r.book === b).map(r => r.date);
+    return `${b} ${dateText(ds[0])}부터 ${dateText(ds[ds.length - 1])}까지`;
+  }).join(', '));
+  const head = el('div', 'span-row span-months');
+  head.append(el('span', 'span-book'));
+  const months = el('div', 'span-track');
+  for (let i = 0; i < 12; i++) {
+    const m = new Date(start.getFullYear(), start.getMonth() + i, 1);
+    const after = new Date(start.getFullYear(), start.getMonth() + i + 1, 1);
+    const label = el('span', 'span-month' + (m.getMonth() === 0 ? ' new-year' : ''), `${m.getMonth() + 1}`);
+    label.style.left = `${(at(key(m)) + at(key(after))) / 2 / total * 100}%`;          // 그 달의 가운데
+    months.append(label);
+  }
+  head.append(months);
+  chart.append(head);
+  for (const book of books) {                 // 처음 묵상한 날이 이른 책이 위로
+    const row = el('div', 'span-row');
+    row.append(el('span', 'span-book', book));
+    const track = el('div', 'span-track');
+    for (let i = 1; i < 12; i++) {
+      const first = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      const line = el('span', 'span-grid' + (first.getMonth() === 0 ? ' new-year' : ''));       // 해가 바뀌는 곳은 진하게
+      line.style.left = `${at(key(first)) / total * 100}%`;
+      track.append(line);
+    }
+    for (const record of mine.filter(r => r.book === book)) {
+      const dot = el('button', 'span-dot'); dot.type = 'button';
+      dot.style.left = `${(at(record.date) + 0.5) / total * 100}%`;
+      const tip = `${dateText(record.date)} · ${record.passage}${record.title ? ' · ' + record.title : ''}`;
+      dot.title = tip; dot.setAttribute('aria-label', tip);
+      dot.onclick = () => showPast(record.date);
+      track.append(dot);
+    }
+    row.append(track);
+    chart.append(row);
+  }
+  box.append(chart, el('p', 'hint', '점 하나가 묵상한 날입니다. 점을 누르면 그날의 묵상이 열립니다.'));
+}
+
+/* inTalk: 비서와의 대화 안에 넣을 때. 그림과 숫자만 보이고, 달마다의 목록은 따로 연다 */
+function fillYear(box, inTalk) {
+  const mine = records.filter(r => r.date.startsWith(shownYear + '-')).sort((a, b) => (a.date + a.meditation_time).localeCompare(b.date + b.meditation_time));
+  const days = [...new Set(mine.map(r => r.date))];
+  const bar = el('div', 'month-bar');
+  const prev = el('button', 'quiet', '‹'); prev.type = 'button'; prev.setAttribute('aria-label', '이전 해');
+  const next = el('button', 'quiet', '›'); next.type = 'button'; next.setAttribute('aria-label', '다음 해');
+  prev.onclick = () => { shownYear -= 1; openYear(); };
+  next.onclick = () => { shownYear += 1; openYear(); };
+  if (inTalk) bar.append(el('h3', 'view-title', `${shownYear}년의 묵상`));
+  else bar.append(prev, el('h2', '', `${shownYear}년의 묵상`), next);
+  const stats = el('p', 'stats');
+  stats.append(el('strong', '', `${days.length}일`), ' 묵상 · 가장 길게 ', el('strong', '', `${longestRun(days)}일`),
+               ' 이어서 · ', el('strong', '', `${new Set(mine.map(r => r.book)).size}권`));
+  box.replaceChildren(bar, stats);
+
+  /* 그림: 열두 달을 줄로, 날짜를 칸으로. 묵상한 날이 칠해진다 */
+  const heat = el('div', 'heat'); heat.setAttribute('role', 'img');
+  heat.setAttribute('aria-label', `${shownYear}년에 묵상한 날 ${days.length}일을 달마다 칸으로 나타낸 그림`);
+  for (let m = 1; m <= 12; m++) {
+    heat.append(el('span', 'month', `${m}월`));
+    const last = new Date(shownYear, m, 0).getDate();
+    for (let d = 1; d <= 31; d++) {
+      const key = `${shownYear}-${pad(m)}-${pad(d)}`;
+      heat.append(el('span', 'cell' + (d > last ? ' none' : days.includes(key) ? ' on' : '') + (key === todayKey ? ' now' : '')));
+    }
+  }
+  const legend = el('p', 'hint legend');
+  legend.append(el('span', 'cell on'), ' 묵상한 날  ', el('span', 'cell'), ' 묵상하지 않은 날');
+  box.append(heat, legend);
+  if (inTalk) {
+    const year = shownYear;
+    const more = el('button', 'quiet', '달마다 자세히 보기'); more.type = 'button';
+    more.onclick = () => { shownYear = year; openYear(); };
+    box.append(more);
+    return;
+  }
+
+  if (!mine.length) box.append(el('p', 'hint', '이 해에 저장한 묵상이 없습니다.'));
+  let month = '';
+  for (const record of mine) {      // 달마다: 언제 어느 본문을 묵상했는가
+    if (record.date.slice(0, 7) !== month) {
+      month = record.date.slice(0, 7);
+      box.append(el('h3', 'month-head', `${Number(month.slice(5))}월`));
+    }
+    box.append(recordRow(record, record.title, true));
+  }
+}
+
+
+/* ---- 돌아보기 ----
+   지난 묵상을 책별로, 해마다 묻는다. 물음 하나와 답 하나가 한 쪽이다.
+   쪽은 이 기기에 최근 30쪽까지 남는다. 비서는 최근 10쪽의 물음과 답을 기억해 "그 책"을 알아듣는다.
+   0쪽은 목록(차례)이다. 돌아보기에 들어오면 늘 목록부터 보이고, 물음을 누르면 그 쪽이 열린다. */
+const MAX_PAGES = 30, REMEMBER_PAGES = 10;
+const reviewPage = document.getElementById('review-page');
+const pageBar = document.getElementById('page-bar');
+const pageCount = document.getElementById('page-count');
+const pagePrev = document.getElementById('page-prev');
+const pageNext = document.getElementById('page-next');
+const askBox = document.getElementById('ask-box');
+let reviewPages = store.read('reviewPages', []);    // [{ q, a, at }]
+if (!Array.isArray(reviewPages)) reviewPages = [];
+let reviewAt = 0;                                   // 지금 펼친 쪽. 0은 목록
+let clearing = false;                               // 쪽을 비울지 묻는 중
+let pending = null;                                 // 답을 기다리는 물음: { q, failed }
+
+function renderAnswer(text) {
+  const box = el('div', 'guide');
+  for (const block of text.replace(/\[\[[^\[\]]{1,40}\]\]/g, '').split(/\n{2,}/)) renderBlock(box, block);
+  return box;
+}
+
+function dotDate(key) { return key ? `${key.slice(0, 4)}.${Number(key.slice(5, 7))}.${Number(key.slice(8, 10))}` : ''; }
+
+/* 최근에 마친 책: 마지막 장 마지막 절까지 묵상한 책 가운데, 그 책을 마친 날이 가장 늦은 책.
+   같은 책을 여러 번 묵상했으면 이번에 마친 회차만 본다: 앞 회차를 마친 날 뒤부터,
+   그리고 묵상 사이가 넉 달 넘게 비면 그 뒤부터 */
+const ROUND_GAP_DAYS = 120;
+function latestFinished() {
+  if (!bookList) return null;
+  let best = null;
+  for (const b of bookList) {
+    const ends = records.filter(r => r.book === b.name && r.chapter_end === b.last_chapter && r.verse_end === b.last_verse)
+      .map(r => r.date).sort();
+    const end = ends[ends.length - 1];
+    if (end && (!best || end > best.end)) best = { name: b.name, end, before: ends.filter(d => d < end).pop() || '' };
+  }
+  if (!best) return null;
+  const dates = records.filter(r => r.book === best.name && r.date > best.before && r.date <= best.end).map(r => r.date).sort();
+  let from = 0;
+  for (let i = 1; i < dates.length; i++) {
+    if ((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000 > ROUND_GAP_DAYS) from = i;
+  }
+  const round = dates.slice(from);
+  return { name: best.name, count: round.length, first: round[0], last: round[round.length - 1] };
+}
+
+function shortDate(key) { return key ? `${Number(key.slice(5, 7))}.${Number(key.slice(8, 10))}` : ''; }
+
+function listPage() {
+  const box = el('div', 'contents');
+  if (reviewPages.length || pending) {
+    box.append(el('h2', '', '물어본 것'));
+    const list = el('ol');
+    reviewPages.forEach((page, i) => {
+      const b = el('button'); b.type = 'button';
+      b.append(el('span', 'q', page.q), el('span', 'd', shortDate(page.at)));
+      b.onclick = () => openPage(i + 1);
+      const item = el('li'); item.append(b); list.append(item);
+    });
+    if (pending) {
+      const b = el('button'); b.type = 'button';
+      b.append(el('span', 'q', pending.q), el('span', 'd waiting-note', pending.failed ? '답을 못 받음' : '답을 기다리는 중'));
+      b.onclick = () => openPage(reviewPages.length + 1);
+      const item = el('li'); item.append(b); list.append(item);
+    }
+    box.append(list);
+  }
+  // 최근에 마친 책: 그 책의 요약을 묻는 단추 하나
+  const latest = latestFinished();
+  if (latest) {
+    const card = el('section', 'latest');
+    card.append(el('p', 'eyebrow', '최근에 마친 책'), el('h3', '', latest.name),
+                el('p', 'span', `${dotDate(latest.first)} ~ ${dotDate(latest.last)} · ${latest.count}편`));
+    const sum = el('button', '', '요약 보기'); sum.type = 'button';
+    sum.onclick = () => ask(`${latest.name} 묵상 요약 (${dotDate(latest.first)} ~ ${dotDate(latest.last)})`);
+    card.append(sum);
+    box.append(card);
+  }
+  if (!reviewPages.length && !pending) box.append(el('p', 'review-lead', '궁금한 것은 아래에 적어 물어보세요.'));
+  const examples = el('div', 'examples');
+  const yearView = el('button', 'view', '한 해의 묵상 보기'); yearView.type = 'button'; yearView.onclick = openYear;
+  examples.append(yearView);
+  box.append(examples);
+
+  if (clearing) {
+    const ask_ = el('div', 'confirm-box');
+    ask_.setAttribute('role', 'alertdialog');
+    ask_.append(el('p', '', `물어본 쪽 ${reviewPages.length}개를 모두 비울까요? 묵상 기록은 그대로 있어요.`));
+    const row = el('div', 'buttons');
+    const yes = el('button', '', '비우기'); yes.type = 'button';
+    yes.onclick = () => { reviewPages = []; pending = null; clearing = false; store.only('reviewPages', []); renderReview(); };
+    const no = el('button', 'link', '그대로 두기'); no.type = 'button';
+    no.onclick = () => { clearing = false; renderReview(); };
+    row.append(yes, no);
+    ask_.append(row);
+    box.append(ask_);
+  } else {
+    const links = el('nav', 'home-links');
+    const guide = el('button', 'link', '안내 보기'); guide.type = 'button'; guide.onclick = () => show('reviewGuide');
+    links.append(guide);
+    if (reviewPages.length && !pending) {
+      const clear = el('button', 'link', '쪽 비우기'); clear.type = 'button';
+      clear.onclick = () => { clearing = true; renderReview(); };
+      links.append(clear);
+    }
+    const close = el('button', 'link', '책 덮기'); close.type = 'button';
+    close.onclick = () => { renderHome(); show('home'); closeBook(''); };
+    links.append(close);
+    box.append(links);
+  }
+  return box;
+}
+
+function openPage(n) {
+  clearing = false;
+  reviewAt = n;
+  renderReview();
+  mainBox.classList.remove('turning'); void mainBox.offsetWidth; mainBox.classList.add('turning');
+  window.scrollTo(0, 0);
+}
+
+function renderReview() {
+  const total = reviewPages.length + (pending ? 1 : 0);
+  reviewAt = Math.max(0, Math.min(reviewAt, total));
+  pageBar.hidden = reviewAt === 0;
+  pagePrev.disabled = reviewAt <= 1;
+  pageNext.disabled = reviewAt >= total;
+  pageCount.textContent = `${reviewAt} / ${total}`;
+  reviewPage.replaceChildren();
+  if (reviewAt === 0) { reviewPage.append(listPage()); return; }
+  if (pending && reviewAt === total) {
+    reviewPage.append(el('p', 'question', pending.q));
+    if (!pending.failed) { reviewPage.append(waitingMark('비서가 기록을 찾고 있습니다')); return; }
+    const failed = el('div', 'failed');
+    failed.setAttribute('role', 'alert');
+    const retry = el('button', '', '다시 묻기'); retry.type = 'button';
+    const q = pending.q;
+    retry.onclick = () => { pending = null; ask(q); };
+    failed.append(el('p', '', `답을 받지 못했습니다. ${pending.failed}`), retry);
+    reviewPage.append(failed);
+    return;
+  }
+  const page = reviewPages[reviewAt - 1];
+  reviewPage.append(el('p', 'question', page.q));
+  if (page.at) reviewPage.append(el('p', 'asked', dateText(page.at)));
+  reviewPage.append(renderAnswer(page.a));
+}
+
+function turnPage(step) {
+  if (reviewAt === 0) return;                      // 목록에서는 넘기지 않는다
+  const total = reviewPages.length + (pending ? 1 : 0);
+  const next = Math.max(1, Math.min(reviewAt + step, total));
+  if (next !== reviewAt) openPage(next);
+}
+document.getElementById('page-list').onclick = () => openPage(0);
+pagePrev.onclick = () => turnPage(-1);
+pageNext.onclick = () => turnPage(1);
+/* 옆으로 밀어 넘기기: 왼쪽으로 밀면 뒤 쪽, 오른쪽으로 밀면 앞 쪽 */
+let touchFrom = null;
+reviewPage.addEventListener('touchstart', (e) => { const t = e.touches[0]; touchFrom = { x: t.clientX, y: t.clientY }; }, { passive: true });
+reviewPage.addEventListener('touchend', (e) => {
+  if (!touchFrom) return;
+  const t = e.changedTouches[0], dx = t.clientX - touchFrom.x, dy = t.clientY - touchFrom.y;
+  touchFrom = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) turnPage(dx < 0 ? 1 : -1);
+});
+
+function openReview() {
+  if (!store.read('reviewGuided', false)) { show('reviewGuide'); return; }     // 처음 한 번은 안내부터
+  reviewAt = 0;                                                               // 늘 목록부터
+  clearing = false;
+  renderReview();
+  if (!bookList) finishedBooks().then(() => { if (currentView === 'review' && reviewAt === 0) renderReview(); });
+  show('review');
+}
+
+async function ask(question) {
+  question = question.trim();
+  if (!question || (pending && !pending.failed)) return;
+  if (currentView !== 'review') show('review');
+  pending = { q: question, failed: null };
+  clearing = false;
+  openPage(reviewPages.length + 1);
+  const remembered = reviewPages.slice(-REMEMBER_PAGES).flatMap(p => [{ role: 'user', content: p.q }, { role: 'assistant', content: p.a }]);
+  try {
+    // 일기장에 로그인했으면 서버가 일기장에서 기록을 읽는다. 기록은 보내지 않는다
+    const data = await api('/api/chat', { messages: [...remembered, { role: 'user', content: question }],
+                                          records: account ? [] : records, today: todayKey });
+    reviewPages.push({ q: question, a: data.reply, at: todayKey });
+    reviewPages = reviewPages.slice(-MAX_PAGES);
+    store.only('reviewPages', reviewPages);
+    const waitingAt = reviewAt === reviewPages.length;    // 기다리던 쪽을 보고 있었는가 (push 뒤라 길이가 그 쪽 번호)
+    pending = null;
+    if (waitingAt) reviewAt = reviewPages.length;
+  } catch (e) {
+    pending.failed = e.message;
+  }
+  if (currentView === 'review') renderReview();
+}
+askBar.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const question = askBox.value;
+  askBox.value = '';
+  askBox.blur();
+  ask(question);
+});
+
+document.getElementById('review-guide-done').onclick = () => { store.only('reviewGuided', true); openReview(); };
+document.getElementById('tab-review').onclick = openReview;
+document.getElementById('tab-home').onclick = () => { renderHome(); show('home'); };
+
+/* ---- 지난 묵상 보기 ---- */
+function showPast(key) {
+  views.past.replaceChildren();
+  for (const record of recordsOn(key)) views.past.append(recordCard(record, true));
+  show('past');
+}
+
+/* 저장: 기록에 날짜와 시각을 붙여 보관하고, 묵상 중인 책에서 어디까지 왔는지 적어 둔다 */
+async function keepRecord(record) {
+  const now = new Date();
+  const mine = { id: newId(), date: dateKey(now), meditation_time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, ...record };
+  records.push(mine);
+  const kept = store.only('records', records);         // 먼저 이 기기에 적어 둔다. 올리다 실패해도 잃지 않는다
+  let uploaded = false, problem = '';
+  if (account) {
+    try { await upload(mine); uploaded = true; store.only('records', records); }
+    catch (e) { problem = e.message; }
+  }
+  discardDraft();
+  const ahead = !progress || currentMode === 'continue' ||
+    (progress.book === record.book && (record.chapter_start > progress.chapter ||
+      (record.chapter_start === progress.chapter && record.verse_start > progress.verse)));
+  if (ahead) {     // 함께 읽는 다른 책의 본문을 직접 적은 날은, 묵상 중인 책의 자리를 그대로 둔다
+    progress = { book: record.book, chapter: record.chapter_end, verse: record.verse_end };
+    store.write('progress', progress);
+  }
+  return { kept, uploaded, problem };
+}
+
+composer.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const text = messageBox.value.trim();
+  if (!text || busy) return;
+  thread.append(el('p', 'entry', text));
+  sentCount += 1;
+  if (sentCount >= 6) wrapUpLink.hidden = false;   // 묵상이 어느 정도 진행되면 정리하는 길을 열어 둔다
+  messageBox.value = '';
+  resizeMessageBox();
+  send(text);
+});
+
+function resizeMessageBox() {
+  messageBox.style.height = 'auto';
+  messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
+  sendButton.disabled = busy || !messageBox.value.trim();
+}
+messageBox.addEventListener('input', resizeMessageBox);
+wrapUpLink.addEventListener('click', () => { if (!busy) { askedToWrapUp = true; showRecord(); } });
+
+/* 컴퓨터에서는 Enter로 보내고 Shift+Enter로 줄을 바꾼다. 휴대폰에서는 Enter가 줄바꿈이다.
+   한글을 조합하는 중의 Enter는 보내기로 처리하지 않는다. */
+messageBox.addEventListener('keydown', (event) => {
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  if (event.key === 'Enter' && !event.shiftKey && !touch && !event.isComposing && event.keyCode !== 229) {
+    event.preventDefault();
+    composer.requestSubmit();
+  }
+});
+
+renderHome();
+show('home');
+
+/* ---- 표지와 안내 ---- */
+const cover = document.getElementById('cover');
+function leaveGuide() { store.write('guided', true); renderHome(); show('home'); }
+document.getElementById('guide-done').onclick = leaveGuide;
+document.getElementById('skip-guide').onclick = leaveGuide;
+const coverNote = document.getElementById('cover-note');
+let entered = false;
+document.getElementById('open-book').onclick = async () => {
+  cover.classList.add('open');
+  if (entered && currentView === 'home' && (account || !appConfig.login)) return;     // 덮었다가 다시 펼친 것
+  entered = true;
+  await configReady;
+  await enterDiary();      // 일기장이 연결되어 있으면 로그인부터, 그다음 안내(처음 한 번), 그리고 달력
+};
+document.getElementById('sign-in').onclick = signIn;
+/* 묵상을 마치고 저장하면 책을 덮는다. 다시 누르면 달력이 펼쳐진다 */
+const backBook = document.getElementById('back-book');
+let backTimer = null;
+function closeBook(note) {                           // 조용히 뒷면만 보인다: 돌거나 접히는 움직임 없이 스며든다
+  coverNote.textContent = note || '';
+  clearTimeout(backTimer);
+  cover.classList.add('still', 'back');
+  cover.classList.remove('open');
+  document.getElementById('open-book').tabIndex = -1;
+  backBook.tabIndex = 0;
+  backBook.focus({ preventScroll: true });
+  renderCoverAccount();
+  backTimer = setTimeout(() => cover.classList.remove('still'), 500);
+}
+
+/* 뒷면 아래: 로그인한 사람과 로그아웃. 로그아웃은 여기서만 묻는다 */
+const coverAccount = document.getElementById('cover-account');
+function renderCoverAccount() {
+  coverAccount.replaceChildren();
+  cover.classList.remove('asking');
+  if (!account) return;
+  const line = el('p', 'account', account.email);
+  const out = el('button', 'link', '로그아웃'); out.type = 'button';
+  line.append(out);
+  coverAccount.append(line);
+  out.onclick = () => {
+    const ask_ = el('div', 'confirm-box');
+    ask_.setAttribute('role', 'alertdialog');
+    ask_.append(el('p', 'title', '로그아웃하면'));
+    const list = el('ul');
+    for (const t of ['일기장에 적은 묵상은 그대로 남아요. 다시 로그인하면 모두 돌아와요.',
+                     '이 기기에서는 묵상 기록, 이어서 할 자리, 하다가 멈춘 묵상이 보이지 않아요. (일기장에 적어 두었다가 로그인하면 돌아와요)',
+                     '돌아보기에서 물어본 쪽은 지워져요. 돌아오지 않아요.',
+                     '다시 펼치면 Google 로그인부터 해요.']) list.append(el('li', '', t));
+    ask_.append(list);
+    const row = el('div', 'buttons');
+    const yes = el('button', '', '로그아웃'); yes.type = 'button'; yes.onclick = signOut;
+    const no = el('button', 'link', '그대로 두기'); no.type = 'button'; no.onclick = renderCoverAccount;
+    row.append(yes, no);
+    ask_.append(row);
+    coverAccount.replaceChildren(ask_);
+    cover.classList.add('still', 'asking');
+    setTimeout(() => cover.classList.remove('still'), 50);
+  };
+}
+backBook.onclick = () => {                           // 뒷면을 누르면 앞으로 돌아오고, 이어서 펼쳐진다
+  if (!cover.classList.contains('back')) return;
+  cover.classList.remove('back');
+  coverAccount.replaceChildren();
+  backBook.tabIndex = -1;
+  const front = document.getElementById('open-book');
+  front.tabIndex = 0;
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setTimeout(() => front.click(), still ? 0 : 1000);
+};
+mainBox.classList.remove('turning');
+
+/* 글 쓰는 자리의 높이만큼 아래 여백을 둔다 */
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--composer-height', composer.offsetHeight + 'px');
+}).observe(composer);
+
+/* 자판이 올라오면 글 쓰는 자리도 자판 바로 위로 올린다.
+   보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다 */
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const lift = () => {
+    const gap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    const wasAtEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+    composer.style.bottom = askBar.style.bottom = gap ? gap + 'px' : '';
+    document.documentElement.style.setProperty('--keyboard', gap + 'px');
+    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 마지막 질문이 보이게
+  };
+  vv.addEventListener('resize', lift);
+  vv.addEventListener('scroll', lift);
+}
+</script>
+</body>
+</html>
