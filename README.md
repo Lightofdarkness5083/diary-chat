@@ -84,10 +84,12 @@ flowchart LR
 | --- | --- |
 | Build Command | `pip install -r requirements.txt` |
 | Start Command | `uvicorn dev_main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `ANTHROPIC_API_KEY`, `APP_PASSCODE`, `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG` |
+| Environment | `ANTHROPIC_API_KEY`, `APP_PASSCODE`, `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `ALLOWED_ORIGINS` |
 | Secret Files | AI 지시문 다섯 파일 (`prompts/README.md`의 이름 그대로) |
 
-`main`에 합치면 Render가 자동으로 다시 배포한다. 화면(`frontend/`)은 Vercel로 옮길 예정이다.
+`main`에 합치면 Render가 자동으로 다시 배포한다.
+
+화면(`frontend/`)은 [Vercel](https://vercel.com)에도 올린다. Vercel 프로젝트의 Root Directory를 `frontend`로 두면 빌드 없이 그대로 올라간다. Vercel에서 연 화면은 Render 서버를 부르므로, Render의 `ALLOWED_ORIGINS`에 Vercel 주소를 적고 Firebase 로그인 허용 도메인에도 더한다.
 
 ## 일기장 (Firestore)
 
@@ -104,6 +106,7 @@ flowchart LR
 .venv/bin/python -m tests.test_chat
 .venv/bin/python -m tests.test_diary
 .venv/bin/python -m tests.test_passcode
+.venv/bin/python -m tests.test_cors
 ```
 
 AI를 실제로 부르지 않고, 흉내 낸 답으로 대화 흐름과 기록의 모양을 확인한다.
