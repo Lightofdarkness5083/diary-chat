@@ -1320,7 +1320,9 @@ function recordCard(record, past) {
       store.only('records', records);
       renderHome(); show('home');
     };
-    const row = el('div', 'buttons'); row.append(file, remove);
+    const share = el('button', '', '나눔하기'); share.type = 'button';     // 보고 있는 이 묵상을 바로 나눈다
+    share.onclick = () => makeSharePdf(record);
+    const row = el('div', 'buttons'); row.append(share, file, remove);
     tools.append(row);
     card.append(tools);
     return card;
@@ -1884,6 +1886,7 @@ async function recordPdf(record) {
 
 async function makeSharePdf(record) {
   const box = views.share;
+  if (currentView !== 'share') show('share');          // 달력에서 연 묵상에서 바로 나눌 때
   const note = el('p', 'home-status', 'PDF를 만들고 있습니다…');
   note.setAttribute('role', 'status');
   box.replaceChildren(el('h2', 'view-title', '나눔하기'), el('p', 'hint', `${dateText(record.date)} · ${record.passage}`), note);
