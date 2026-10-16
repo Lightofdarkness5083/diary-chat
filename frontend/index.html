@@ -427,6 +427,15 @@
   .record .body p { margin: 0; white-space: pre-wrap; }
   .record .body p + p { margin-top: 0.5rem; }
   .record .body ul, .record .body ol { margin: 0; padding-left: 1.3rem; }
+  /* 지난 대화: 돌아보기에서 물은 대화의 목록 (일기장에 남는다) */
+  .convo-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .convo-list li { display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--line); }
+  .convo-list .open { flex: 1; display: block; margin: 0; padding: 0.85rem 0.25rem; text-align: left; background: none;
+                      color: var(--ink); border: 0; border-radius: 0; font: inherit; cursor: pointer; }
+  .convo-list .what { display: block; font-size: 1.0625rem; font-weight: 600; }
+  .convo-list .when { display: block; color: var(--muted); font-size: 0.875rem; }
+  .convo-list .now { color: var(--moss); font-weight: 700; }
+  .convo-list .remove { flex: none; width: auto; margin: 0; padding: 0.4rem 0.2rem; font-size: 0.875rem; color: var(--muted); }
   /* 나눔하기: 묵상 하나를 골라 PDF로 만든다. PDF는 어두운 화면에서도 늘 밝은 종이로 만든다 */
   .share-list { list-style: none; margin: 0; padding: 0; }
   .share-list li + li { border-top: 1px solid var(--line); }
@@ -617,6 +626,8 @@
   </section>
 
   <!-- 기록 찾기 -->
+  <section id="convos" hidden></section>
+
   <section id="search" hidden>
     <h2 class="view-title">기록 찾기</h2>
     <input id="search-box" type="search" placeholder="낱말을 적어 주세요 (예: 은혜, 에베소서)" aria-label="찾을 낱말" autocomplete="off">
@@ -789,6 +800,7 @@ async function signOut() {
   progress = draft = planned = null;
   for (const key of ['progress', 'draft', 'planned', 'stateAt', 'dev-user']) store.only(key, null);
   reviewPages = []; reviewAt = 0; store.only('reviewPages', []);
+  reviewConversation = null; store.only('reviewConversation', null);
   account = null;
   show('login');
   coverNote.textContent = '로그아웃했습니다. 다시 펼치면 로그인합니다.';
@@ -902,6 +914,7 @@ const views = { home: document.getElementById('home'),
                 past: document.getElementById('past'), share: document.getElementById('share'), thread: document.getElementById('thread'),
                 search: document.getElementById('search'), books: document.getElementById('books'),
                 year: document.getElementById('year'), review: document.getElementById('review'),
+                convos: document.getElementById('convos'),
                 reviewGuide: document.getElementById('review-guide'),
                 guide: document.getElementById('guide'), entry: document.getElementById('entry'),
                 login: document.getElementById('login') };
@@ -2222,8 +2235,9 @@ const pageCount = document.getElementById('page-count');
 const pagePrev = document.getElementById('page-prev');
 const pageNext = document.getElementById('page-next');
 const askBox = document.getElementById('ask-box');
-let reviewPages = store.read('reviewPages', []);    // [{ q, a, at }]
+let reviewPages = store.read('reviewPages', []);    // [{ q, a, at }] 지금 대화의 쪽들
 if (!Array.isArray(reviewPages)) reviewPages = [];
+let reviewConversation = store.read('reviewConversation', null);   // 지금 대화의 번호 (일기장의 conversations). 없으면 다음 물음이 새 대화가 된다
 let reviewAt = 0;                                   // 지금 펼친 쪽. 0은 목록
 let clearing = false;                               // 쪽을 비울지 묻는 중
 let pending = null;                                 // 답을 기다리는 물음: { q, failed }
@@ -2300,10 +2314,12 @@ function listPage() {
   if (clearing) {
     const ask_ = el('div', 'confirm-box');
     ask_.setAttribute('role', 'alertdialog');
-    ask_.append(el('p', '', `물어본 쪽 ${reviewPages.length}개를 모두 비울까요? 묵상 기록은 그대로 있어요.`));
+    ask_.append(el('p', '', account
+      ? `지금 대화를 마치고 새 대화를 시작할까요? 물어본 쪽 ${reviewPages.length}개는 지난 대화에 남아요.`
+      : `물어본 쪽 ${reviewPages.length}개를 모두 비울까요? 묵상 기록은 그대로 있어요.`));
     const row = el('div', 'buttons');
-    const yes = el('button', '', '비우기'); yes.type = 'button';
-    yes.onclick = () => { reviewPages = []; pending = null; clearing = false; store.only('reviewPages', []); renderReview(); };
+    const yes = el('button', '', account ? '새 대화 시작' : '비우기'); yes.type = 'button';
+    yes.onclick = () => { startNewConversation(); clearing = false; renderReview(); };
     const no = el('button', 'link', '그대로 두기'); no.type = 'button';
     no.onclick = () => { clearing = false; renderReview(); };
     row.append(yes, no);
@@ -2314,9 +2330,14 @@ function listPage() {
     const guide = el('button', 'link', '안내 보기'); guide.type = 'button'; guide.onclick = () => show('reviewGuide');
     links.append(guide);
     if (reviewPages.length && !pending) {
-      const clear = el('button', 'link', '쪽 비우기'); clear.type = 'button';
+      const clear = el('button', 'link', account ? '새 대화' : '쪽 비우기'); clear.type = 'button';
       clear.onclick = () => { clearing = true; renderReview(); };
       links.append(clear);
+    }
+    if (account) {
+      const past = el('button', 'link', '지난 대화'); past.type = 'button';
+      past.onclick = openConversations;
+      links.append(past);
     }
     const close = el('button', 'link', '책 덮기'); close.type = 'button';
     close.onclick = () => { renderHome(); show('home'); closeBook(''); };
@@ -2324,6 +2345,69 @@ function listPage() {
     box.append(links);
   }
   return box;
+}
+
+/* ---- 대화 기록: 물어본 쪽들은 일기장(conversations)에 남는다. 휴대폰에서 물은 것을 컴퓨터에서도 본다 ---- */
+function startNewConversation() {
+  reviewPages = []; pending = null; reviewAt = 0;
+  reviewConversation = null;                       // 다음 물음이 새 대화를 시작한다 (지금 대화는 일기장에 남아 있다)
+  store.only('reviewPages', []); store.only('reviewConversation', null);
+}
+
+function localDay(at) {
+  const d = new Date(at);
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function openConversations(notice) {
+  const box = views.convos;
+  box.replaceChildren(el('h2', 'view-title', '지난 대화'));
+  const note = el('p', 'hint', typeof notice === 'string' ? notice : '대화를 고르면 그 대화의 쪽들을 다시 펼칩니다.');
+  note.setAttribute('role', 'status');
+  box.append(note);
+  show('convos');
+  let list;
+  try { list = (await getJSON('/api/conversations')).conversations; }
+  catch (e) { note.textContent = `지난 대화를 불러오지 못했습니다. ${e.message}`; return; }
+  if (!list.length) { note.textContent = '아직 남은 대화가 없습니다. 돌아보기에서 물어보면 대화가 남습니다.'; return; }
+  const ul = el('ul', 'convo-list');
+  for (const c of list) {
+    const item = document.createElement('li');
+    const open = el('button', 'open'); open.type = 'button';
+    open.append(el('span', 'what', c.title));
+    const when = el('span', 'when', `${dateText(localDay(c.updated_at))} · ${c.pages}쪽`);
+    if (c.id === reviewConversation) when.append(' · ', el('span', 'now', '지금 대화'));
+    open.append(when);
+    open.onclick = () => loadConversation(c.id);
+    const remove = el('button', 'link remove', '지우기'); remove.type = 'button';
+    remove.setAttribute('aria-label', `${c.title} 대화 지우기`);
+    remove.onclick = async () => {
+      if (!window.confirm(`"${c.title}" 대화를 지울까요? 묵상 기록은 그대로 있어요.`)) return;
+      try { await send_('DELETE', `/api/conversations/${encodeURIComponent(c.id)}`); }
+      catch (e) { if (e.status !== 404) { note.textContent = `지우지 못했습니다. ${e.message}`; return; } }
+      if (c.id === reviewConversation) startNewConversation();
+      openConversations('대화를 지웠습니다.');
+    };
+    item.append(open, remove);
+    ul.append(item);
+  }
+  box.append(ul);
+}
+
+async function loadConversation(id) {
+  let data;
+  try { data = await getJSON(`/api/conversations/${encodeURIComponent(id)}`); }
+  catch (e) { openConversations(`대화를 불러오지 못했습니다. ${e.message}`); return; }
+  const pages = [];
+  for (let i = 0; i < data.messages.length; i++) {          // 물음과 답 한 쌍이 한 쪽
+    const m = data.messages[i], next = data.messages[i + 1];
+    if (m.role === 'user' && next && next.role === 'assistant') { pages.push({ q: m.content, a: next.content, at: localDay(m.at) }); i++; }
+  }
+  reviewPages = pages; pending = null; clearing = false;
+  reviewConversation = id;
+  store.only('reviewPages', reviewPages); store.only('reviewConversation', id);
+  openReview();
 }
 
 function openPage(n) {
@@ -2400,7 +2484,12 @@ async function ask(question) {
   try {
     // 일기장에 로그인했으면 서버가 일기장에서 기록을 읽는다. 기록은 보내지 않는다
     const data = await api('/api/chat', { messages: [...remembered, { role: 'user', content: question }],
-                                          records: account ? [] : records, today: todayKey });
+                                          records: account ? [] : records, today: todayKey,
+                                          conversation_id: reviewConversation || '' });
+    if (data.conversation_id && data.conversation_id !== reviewConversation) {   // 서버가 물음과 답을 대화에 남겼다
+      reviewConversation = data.conversation_id;
+      store.only('reviewConversation', reviewConversation);
+    }
     reviewPages.push({ q: question, a: data.reply, at: todayKey });
     reviewPages = reviewPages.slice(-MAX_PAGES);
     store.only('reviewPages', reviewPages);
