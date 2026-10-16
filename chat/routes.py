@@ -1,11 +1,11 @@
 """묵상 돌아보기 비서 (책 단위, 기간 단위로 지난 묵상을 돌아본다).
 
-  POST /api/chat   물음과 최근 대화를 받아 비서의 답을 돌려준다
+  POST /api/chat   물음과 최근 대화를 받아 비서의 답을 돌려준다. 물음과 답은 대화 기록에 자동으로 남긴다
 
 기록은 서버가 일기장에서 직접 읽는다. 누구의 기록인지는 로그인 정보로만 정한다.
 화면이 보낸 기록은 일기장이 꺼져 있을 때(내 컴퓨터에서 시험할 때)만 쓴다.
 비서는 기록을 통째로 받지 않는다. 두 도구로 필요한 것만 꺼내 읽는다.
-비서는 일기장을 읽기만 한다. 아무것도 쓰지 않는다.
+비서는 묵상 기록을 읽기만 한다. 물음과 답 한 쌍은 대화 기록(conversations)에 붙인다.
 """
 import datetime
 import re
@@ -16,6 +16,7 @@ from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import conversations.service as conversation_service
 from diary import access
 from meditation import ai_client
 from settings import read_prompt
@@ -50,6 +51,7 @@ class ChatRequest(BaseModel):
     messages: list[dict[str, Any]]      # [{"role": "user"|"assistant", "content": "…"}], 묵상자의 물음으로 끝난다
     records: list[dict[str, Any]] = []  # 일기장이 꺼져 있을 때만 쓴다 (시험용)
     today: str = ""                     # 묵상자의 오늘 날짜 YYYY-MM-DD
+    conversation_id: str = ""           # 이어 갈 대화의 번호. 없으면 새 대화를 시작한다
 
 
 def nfc(text):
@@ -155,15 +157,15 @@ def overview(records, today):
 
 
 def _records_for(authorization, sent):
-    """(기록, 오류 응답). 일기장이 켜져 있으면 로그인한 사람의 기록을 일기장에서 읽는다."""
+    """(기록, uid, 오류 응답). 일기장이 켜져 있으면 로그인한 사람의 기록을 일기장에서 읽는다."""
     store = access.store()
     if store is None:                                  # 일기장이 꺼져 있다: 화면이 보낸 기록으로 (시험용)
-        return load_records(sent), None
+        return load_records(sent), None, None
     try:
         uid, _ = access.who(authorization)
     except access.NotSignedIn:
-        return None, JSONResponse({"error": "로그인이 필요합니다."}, status_code=403)
-    return load_records(store.list(uid)), None
+        return None, None, JSONResponse({"error": "로그인이 필요합니다."}, status_code=403)
+    return load_records(store.list(uid)), uid, None
 
 
 @router.post("")
@@ -178,7 +180,7 @@ def chat(request: ChatRequest, authorization: Optional[str] = Header(default=Non
     if not messages or messages[-1]["role"] != "user":
         return JSONResponse({"error": "물음이 비어 있습니다."}, status_code=400)
 
-    records, problem = _records_for(authorization, request.records)
+    records, uid, problem = _records_for(authorization, request.records)
     if problem:
         return problem
     today = request.today if DATE.fullmatch(request.today) else datetime.date.today().isoformat()
@@ -187,4 +189,10 @@ def chat(request: ChatRequest, authorization: Optional[str] = Header(default=Non
         answer = ai_client.reply_with_tools(system, messages, TOOLS, make_tools(records))
     except ai_client.AIError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
-    return {"reply": answer}
+    if uid is None:                                    # 일기장이 꺼져 있으면 남기지 않는다
+        return {"reply": answer, "conversation_id": None, "saved": False}
+    try:                                               # 남기지 못해도 답은 돌려준다
+        saved = conversation_service.save_turn(access.store(), uid, request.conversation_id, messages[-1]["content"], answer)
+        return {"reply": answer, "conversation_id": saved["id"], "saved": True}
+    except Exception:
+        return {"reply": answer, "conversation_id": request.conversation_id or None, "saved": False}

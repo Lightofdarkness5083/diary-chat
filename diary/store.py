@@ -2,6 +2,7 @@
 
     diaries/{기록 번호}       묵상 하나. 누구의 것인지는 문서 안의 uid로 가른다
     diary_state/{uid}        그 사람의 현재 상태 (묵상 중인 책의 자리, 하다가 멈춘 묵상)
+    conversations/{대화 번호}  돌아보기 비서와 나눈 대화 하나. 누구의 것인지는 문서 안의 uid로 가른다
 
 한 문서의 항목은 19개다: 묵상의 17개 항목(schema.FIELDS) + uid + deleted.
 
@@ -16,7 +17,8 @@ MemoryStore는 검사와 내 컴퓨터용이고, FirestoreStore가 실제 일기
 from .legacy import as_current
 from .schema import FIELDS
 
-RECORDS, STATES = "diaries", "diary_state"
+RECORDS, STATES, CONVERSATIONS = "diaries", "diary_state", "conversations"
+MAX_MESSAGES = 200        # 대화 하나에 담는 말의 수 (물음과 답 한 쌍이 한 쪽이니 100쪽)
 
 
 class Conflict(Exception):
@@ -37,10 +39,34 @@ def _order(record):
     return (record["date"], record["meditation_time"], record["id"])
 
 
+# ---- 대화: 묵상과 달리 이어 붙이고, 지울 때는 정말 지운다 (묵상 기록이 아니라 물어본 쪽이다) ----
+class TooLong(Exception):
+    """대화 하나에 담을 수 있는 말을 넘었다. 새 대화로 이어 간다."""
+
+
+def _conversation_summary(conversation_id, stored):
+    """목록에 내어 주는 모양: 말(messages)은 담지 않는다."""
+    return {"id": conversation_id, "title": stored["title"], "created_at": stored["created_at"],
+            "updated_at": stored["updated_at"], "pages": sum(1 for m in stored["messages"] if m["role"] == "user")}
+
+
+def _conversation_full(conversation_id, stored):
+    return {**_conversation_summary(conversation_id, stored), "messages": stored["messages"]}
+
+
+def _new_conversation(uid, title, messages, now):
+    return {"uid": uid, "title": title, "messages": list(messages), "created_at": now, "updated_at": now}
+
+
+def _sorted_conversations(found):
+    return sorted(found, key=lambda c: (c["updated_at"], c["id"]), reverse=True)    # 최근 대화가 위
+
+
 class MemoryStore:
     def __init__(self):
         self.records = {}     # 기록 번호 -> 문서
         self.states = {}      # uid -> 상태
+        self.conversations = {}   # 대화 번호 -> 문서
 
     def _mine(self, uid, record_id):
         stored = self.records.get(record_id)
@@ -77,6 +103,43 @@ class MemoryStore:
     def set_state(self, uid, state):
         self.states[uid] = dict(state)
         return self.states[uid]
+
+    # ---- 대화 ----
+    def _my_conversation(self, uid, conversation_id):
+        stored = self.conversations.get(conversation_id)
+        return stored if stored is not None and stored.get("uid") == uid else None
+
+    def create_conversation(self, uid, conversation_id, title, messages, now):
+        if conversation_id in self.conversations:
+            raise Conflict(conversation_id)
+        if len(messages) > MAX_MESSAGES:
+            raise TooLong(conversation_id)
+        self.conversations[conversation_id] = _new_conversation(uid, title, messages, now)
+        return self.get_conversation(uid, conversation_id)
+
+    def append_conversation(self, uid, conversation_id, messages, now):
+        stored = self._my_conversation(uid, conversation_id)
+        if stored is None:
+            return None
+        if len(stored["messages"]) + len(messages) > MAX_MESSAGES:
+            raise TooLong(conversation_id)
+        stored["messages"] = stored["messages"] + list(messages)
+        stored["updated_at"] = now
+        return self.get_conversation(uid, conversation_id)
+
+    def get_conversation(self, uid, conversation_id):
+        stored = self._my_conversation(uid, conversation_id)
+        return None if stored is None else _conversation_full(conversation_id, stored)
+
+    def list_conversations(self, uid):
+        return _sorted_conversations([_conversation_summary(cid, doc) for cid, doc in self.conversations.items()
+                                      if doc.get("uid") == uid])
+
+    def remove_conversation(self, uid, conversation_id):
+        if self._my_conversation(uid, conversation_id) is None:
+            return False
+        del self.conversations[conversation_id]
+        return True
 
 
 class FirestoreStore:
@@ -134,3 +197,50 @@ class FirestoreStore:
     def set_state(self, uid, state):
         self.db.collection(STATES).document(uid).set(dict(state))
         return dict(state)
+
+    # ---- 대화 ----
+    def _conversation(self, conversation_id):
+        return self.db.collection(CONVERSATIONS).document(conversation_id)
+
+    def _my_conversation(self, uid, conversation_id):
+        snapshot = self._conversation(conversation_id).get()
+        if not snapshot.exists:
+            return None
+        stored = snapshot.to_dict()
+        return stored if stored.get("uid") == uid else None
+
+    def create_conversation(self, uid, conversation_id, title, messages, now):
+        if len(messages) > MAX_MESSAGES:
+            raise TooLong(conversation_id)
+        try:
+            self._conversation(conversation_id).create(_new_conversation(uid, title, messages, now))
+        except Exception:                      # 같은 번호가 이미 있으면 만들지 않는다
+            raise Conflict(conversation_id)
+        return self.get_conversation(uid, conversation_id)
+
+    def append_conversation(self, uid, conversation_id, messages, now):
+        stored = self._my_conversation(uid, conversation_id)
+        if stored is None:
+            return None
+        if len(stored["messages"]) + len(messages) > MAX_MESSAGES:
+            raise TooLong(conversation_id)
+        self._conversation(conversation_id).update({"messages": stored["messages"] + list(messages), "updated_at": now})
+        return self.get_conversation(uid, conversation_id)
+
+    def get_conversation(self, uid, conversation_id):
+        stored = self._my_conversation(uid, conversation_id)
+        return None if stored is None else _conversation_full(conversation_id, stored)
+
+    def list_conversations(self, uid):
+        found = []
+        for snapshot in self.db.collection(CONVERSATIONS).where("uid", "==", uid).stream():
+            stored = snapshot.to_dict()
+            if stored.get("uid") == uid:
+                found.append(_conversation_summary(snapshot.id, stored))
+        return _sorted_conversations(found)
+
+    def remove_conversation(self, uid, conversation_id):
+        if self._my_conversation(uid, conversation_id) is None:
+            return False
+        self._conversation(conversation_id).delete()
+        return True

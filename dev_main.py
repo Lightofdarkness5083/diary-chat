@@ -19,12 +19,14 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
 import chat  # noqa: E402
+import conversations  # noqa: E402
 import diary  # noqa: E402
 import meditation  # noqa: E402
 
 app = FastAPI(title="Diary with Jesus")
 app.include_router(meditation.router)   # 7단계 묵상 인도
 app.include_router(chat.router)         # 묵상 일기 비서
+app.include_router(conversations.router)  # 비서와 나눈 대화 기록
 app.include_router(diary.router)        # 일기장: 묵상 기록을 사용자별로 저장
 
 

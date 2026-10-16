@@ -19,6 +19,7 @@
    - **한 해의 묵상**: 열두 달 동안 어느 책을 언제 묵상했는지 한 장의 그림으로 본다.
    - **낱말 찾기**: 내 묵상 기록 안에서 낱말을 찾는다. AI를 쓰지 않는다.
    - **비서에게 묻기**: "골로새서에서 찾은 진리를 보여 줘", "올해 어떤 책을 묵상했지?"처럼 책 단위, 기간 단위로 물으면 저장된 묵상을 읽고 답한다.
+   - **지난 대화**: 비서에게 물은 쪽들은 일기장에 대화로 남는다. [새 대화]를 누르기 전까지가 한 대화이고, 휴대폰에서 물은 것을 컴퓨터에서도 다시 펼친다.
 
 7. **나눈다.** 달력에서 날짜를 눌러 연 묵상 아래의 **나눔하기**, 또는 달력 아래 메뉴의 **나눔하기**에서 마친 묵상을 고르면 PDF 한 장으로 만들어, 휴대폰의 공유 창으로 카카오톡 등에 보낼 수 있다. PDF는 휴대폰 안에서 만들고 서버나 AI에 보내지 않는다.
 
@@ -48,10 +49,29 @@ flowchart LR
 | `chat/` | 돌아보기 비서. 저장된 묵상을 도구로 찾아 읽고 답한다 |
 | `diary/` | 일기장. 로그인한 사람의 묵상만 Firestore에 읽고 쓴다 |
 | `bible/` | 본문 조회와 성경 DB 검사 (읽기만 한다) |
+| `conversations/` | 비서와 나눈 대화 기록. 주소를 받는 `routes.py`와 일을 하는 `service.py`로 나눴다 |
 | `prompts/` | AI 지시문의 자리. 비어 있다 ([아래](#보안-설계) 참고) |
 | `settings.py` | `.env` 읽기, AI 지시문 찾기 |
 | `tools/` | 예전 묵상 기록을 지금의 구조에 맞추는 도구 |
 | `tests/` | 검사 |
+
+## API
+
+서버 주소의 `/docs`(Swagger UI)에서 모두 보고 시험할 수 있다. `/api/`는 접속 암호와 로그인 정보를 확인한다.
+
+| 길 | 하는 일 |
+| --- | --- |
+| `GET /api/diary/records` | 내 묵상 목록 |
+| `POST /api/diary/records` | 묵상 하나 저장 (새로 만들기만 한다) |
+| `DELETE /api/diary/records/{id}` | 묵상 하나 지우기 ("지움" 표시) |
+| `POST /api/chat` | 돌아보기 비서에게 묻기. 묵상의 윤곽을 시스템 프롬프트에 넣고, 필요하면 도구(`books_in_period`, `book_records`)를 불러 기록을 읽는다. 물음과 답은 대화 기록에 자동으로 남는다 |
+| `POST /api/conversations` | 대화 하나 저장 |
+| `GET /api/conversations` | 내 대화 목록. 말(messages)은 담지 않는다: 번호, 이름, 쪽 수, 만든 때, 고친 때 |
+| `GET /api/conversations/{id}` | 대화 하나의 말 전부 |
+| `DELETE /api/conversations/{id}` | 대화 하나 지우기 |
+| `POST /api/meditation/start` 등 | 7단계 묵상 인도 |
+
+**묵상은 고치지 않는다(PUT이 없다).** 묵상은 그날 그 자리에서 쓴 일기라서, 저장한 뒤에 다른 내용으로 덮어쓰지 않는다. 저장하기 전에 정리 화면에서 고치고, 저장한 뒤에는 지우고 다시 쓸 수 있다.
 
 ## 보안 설계
 
@@ -111,6 +131,7 @@ iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막
 .venv/bin/python -m tests.test_diary
 .venv/bin/python -m tests.test_passcode
 .venv/bin/python -m tests.test_cors
+.venv/bin/python -m tests.test_conversations
 ```
 
 AI를 실제로 부르지 않고, 흉내 낸 답으로 대화 흐름과 기록의 모양을 확인한다.
