@@ -427,6 +427,18 @@
   .record .body p { margin: 0; white-space: pre-wrap; }
   .record .body p + p { margin-top: 0.5rem; }
   .record .body ul, .record .body ol { margin: 0; padding-left: 1.3rem; }
+  /* 나눔하기: 묵상 하나를 골라 PDF로 만든다. PDF는 어두운 화면에서도 늘 밝은 종이로 만든다 */
+  .share-list { list-style: none; margin: 0; padding: 0; }
+  .share-list li + li { border-top: 1px solid var(--line); }
+  .share-list button { display: block; width: 100%; margin: 0; padding: 0.85rem 0.25rem; text-align: left;
+                       background: none; color: var(--ink); border: 0; border-radius: 0; font: inherit; cursor: pointer; }
+  .share-list .when { display: block; color: var(--muted); font-size: 0.875rem; }
+  .share-list .what { display: block; font-size: 1.0625rem; font-weight: 600; }
+  .share-sheet { position: fixed; left: -10000px; top: 0; width: 680px; padding: 40px 44px;
+                 --paper: #F6F8F4; --ink: #1C2630; --pen: #27498A; --sage: #E6EDE2; --moss: #56724A;
+                 --muted: #68727C; --line: #D6DCD3; --sheet: #FFFFFF;
+                 background: var(--sheet); color: var(--ink); }
+  .share-sheet .record { margin: 0; padding: 0; box-shadow: none; border: 0; background: var(--sheet); }
   .record .body li { margin-bottom: 0.35rem; }
   .record .body li::marker { color: var(--moss); }
   .record .own { color: var(--pen); font-family: var(--serif); }
@@ -566,6 +578,7 @@
 
   <!-- 지난 묵상 보기 -->
   <section id="past" hidden></section>
+  <section id="share" hidden></section>
 
   <!-- 돌아보기 안내: 돌아보기에서 무엇을 하는가. 처음 한 번 보이고, 그 뒤에는 '안내 보기'로 연다 -->
   <section id="review-guide" class="guide-page" hidden>
@@ -886,7 +899,7 @@ async function enterDiary() {
 
 /* ---- 화면 바꾸기 ---- */
 const views = { home: document.getElementById('home'),
-                past: document.getElementById('past'), thread: document.getElementById('thread'),
+                past: document.getElementById('past'), share: document.getElementById('share'), thread: document.getElementById('thread'),
                 search: document.getElementById('search'), books: document.getElementById('books'),
                 year: document.getElementById('year'), review: document.getElementById('review'),
                 reviewGuide: document.getElementById('review-guide'),
@@ -1307,7 +1320,9 @@ function recordCard(record, past) {
       store.only('records', records);
       renderHome(); show('home');
     };
-    const row = el('div', 'buttons'); row.append(file, remove);
+    const share = el('button', '', '나눔하기'); share.type = 'button';     // 보고 있는 이 묵상을 바로 나눈다
+    share.onclick = () => makeSharePdf(record);
+    const row = el('div', 'buttons'); row.append(share, file, remove);
     tools.append(row);
     card.append(tools);
     return card;
@@ -1783,7 +1798,7 @@ function renderHome(notice, finishedBook) {
   }
   const link = (text, action) => { const b = el('button', 'link', text); b.type = 'button'; b.onclick = action; homeLinks.append(b); };
   link('안내 보기', () => show('guide'));
-  if (account) link('파일에서 가져오기', () => importInput.click());
+  if (records.length) link('나눔하기', openShare);
   if (!leaving) link('책 덮기', () => { renderHome(); show('home'); closeBook(''); });
 
   homeExtra.replaceChildren();
@@ -1792,42 +1807,119 @@ function renderHome(notice, finishedBook) {
   // 로그아웃은 책을 덮은 뒤 뒷면 아래에서 묻는다
 }
 
-/* ---- 파일에서 묵상 가져오기: 다른 곳에 정리해 두었던 묵상을 기록 모양으로 만든 파일(.json)을 읽는다 ----
-   읽은 묵상은 "이 기기에만 있는 묵상"으로 두고, 옮기기 상자에서 확인한 뒤 일기장으로 옮긴다 (올리는 길은 하나뿐이다) */
-const importInput = document.createElement('input');
-importInput.type = 'file'; importInput.accept = '.json,application/json'; importInput.hidden = true;
-document.body.append(importInput);
-importInput.onchange = async () => {
-  const file = importInput.files[0];
-  importInput.value = '';
-  if (!file) return;
-  let data;
-  try { data = JSON.parse(await file.text()); }
-  catch (e) { renderHome('파일을 읽지 못했습니다. 묵상 가져오기용 파일인지 확인해 주세요.'); return; }
-  if (!data || data.kind !== 'diary-with-jesus-import' || !Array.isArray(data.records)) {
-    renderHome('묵상 가져오기용 파일이 아닙니다.'); return;
+/* ---- 나눔하기: 마친 묵상 하나를 골라 PDF 한 장으로 만들고, 휴대폰의 공유 창(카카오톡 등)으로 보낸다 ----
+   PDF는 이 기기 안에서 만든다. 서버나 AI에 묵상을 보내지 않는다 */
+const SHARE_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+                    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+let shareLibsReady = null;
+function loadShareLibs() {
+  if (!shareLibsReady) shareLibsReady = (async () => { for (const src of SHARE_LIBS) await loadScript(src); })()
+    .catch(e => { shareLibsReady = null; throw new Error('PDF 도구를 불러오지 못했습니다. 연결을 확인해 주세요.'); });
+  return shareLibsReady;
+}
+
+function openShare() {
+  const box = views.share;
+  box.replaceChildren(el('h2', 'view-title', '나눔하기'),
+                      el('p', 'hint', '나눌 묵상을 고르면 PDF로 만들어 카카오톡 등으로 보낼 수 있습니다.'));
+  const list = el('ul', 'share-list');
+  for (const record of [...records].reverse().slice(0, 30)) {         // 최근 묵상부터
+    const item = el('button', '');
+    item.type = 'button';
+    item.append(el('span', 'when', dateText(record.date)), el('span', 'what', record.passage));
+    if (record.title) item.append(el('span', 'when', record.title));
+    item.onclick = () => makeSharePdf(record);
+    const li = document.createElement('li'); li.append(item); list.append(li);
   }
-  const have = new Set(records.map(r => r.id));
-  const seen = new Set(records.map(r => `${r.date}|${r.passage}`));
-  let added = 0, skipped = 0, wrong = 0;
-  for (const item of data.records) {
-    const record = item && item.record;
-    const ok = item && /^[a-z0-9]{8,40}$/.test(item.id || '') && record && typeof record === 'object' &&
-      RECORD_FIELDS.every(field => field in record) && /^\d{4}-\d\d-\d\d$/.test(record.date) && record.passage;
-    if (!ok) { wrong += 1; continue; }
-    if (have.has(item.id) || seen.has(`${record.date}|${record.passage}`)) { skipped += 1; continue; }
-    const copy = { id: item.id };
-    for (const field of RECORD_FIELDS) copy[field] = record[field];
-    records.push(copy); have.add(item.id); seen.add(`${record.date}|${record.passage}`); added += 1;
+  box.append(list);
+  loadShareLibs().catch(() => {});       // 고르는 동안 미리 불러 둔다
+  show('share');
+}
+
+function shareFileName(record) {
+  return `${record.date} ${record.passage} 묵상.pdf`.replace(/[\\/:*?"<>|]/g, '-');
+}
+
+/* 묵상 정리를 화면 밖에 한 장 그려 사진처럼 찍고, A4 쪽으로 나눈다. 쪽은 항목 사이에서 넘긴다 */
+async function recordPdf(record) {
+  await loadShareLibs();
+  const sheet = el('div', 'share-sheet');
+  const card = recordCard(record, true);
+  card.querySelectorAll('.confirm').forEach(node => node.remove());
+  card.querySelector('.eyebrow').textContent = '묵상 나눔 · Diary with Jesus';
+  sheet.append(card);
+  document.body.append(sheet);
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = await window.html2canvas(sheet, { scale: 2, backgroundColor: '#FFFFFF', logging: false });
+    const ratio = canvas.height / sheet.offsetHeight;                  // 화면 1px이 그림에서 몇 px인가
+    const top = sheet.getBoundingClientRect().top;
+    const breaks = [...card.children].map(node => (node.getBoundingClientRect().top - top) * ratio);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const pageW = 210, pageH = 297;
+    const fullPx = Math.floor(pageH * canvas.width / pageW);          // 한 쪽에 들어가는 그림 높이
+    const topPad = Math.round(40 * ratio);                             // 둘째 쪽부터는 위에 여백을 둔다
+    let from = 0, first = true;
+    while (from < canvas.height - 1) {
+      const pagePx = first ? fullPx : fullPx - topPad;
+      let to = Math.min(from + pagePx, canvas.height);
+      if (to < canvas.height) {                                        // 항목이 잘리지 않도록 그 앞에서 넘긴다
+        const fit = breaks.filter(b => b > from + pagePx * 0.3 && b <= to);
+        if (fit.length) to = Math.floor(fit[fit.length - 1]);
+      }
+      const pad = first ? 0 : topPad;
+      const part = document.createElement('canvas');
+      part.width = canvas.width; part.height = to - from + pad;
+      const ctx = part.getContext('2d');
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, part.width, part.height);
+      ctx.drawImage(canvas, 0, from, canvas.width, to - from, 0, pad, canvas.width, to - from);
+      if (!first) pdf.addPage();
+      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, part.height * pageW / canvas.width);
+      first = false; from = to;
+    }
+    return new File([pdf.output('blob')], shareFileName(record), { type: 'application/pdf' });
+  } finally {
+    sheet.remove();
   }
-  sortRecords();
-  store.only('records', records);
-  const notes = [`파일에서 묵상 ${added}개를 읽었습니다.`];
-  if (skipped) notes.push(`이미 있는 ${skipped}개는 건너뛰었습니다.`);
-  if (wrong) notes.push(`모양이 맞지 않는 ${wrong}개는 읽지 않았습니다.`);
-  if (added) notes.push('아래 목록을 확인하고 일기장으로 옮겨 주세요.');
-  renderHome(notes.join(' '));
-};
+}
+
+async function makeSharePdf(record) {
+  const box = views.share;
+  if (currentView !== 'share') show('share');          // 달력에서 연 묵상에서 바로 나눌 때
+  const note = el('p', 'home-status', 'PDF를 만들고 있습니다…');
+  note.setAttribute('role', 'status');
+  box.replaceChildren(el('h2', 'view-title', '나눔하기'), el('p', 'hint', `${dateText(record.date)} · ${record.passage}`), note);
+  let file;
+  try { file = await recordPdf(record); }
+  catch (e) {
+    note.textContent = `PDF를 만들지 못했습니다. ${e.message || ''}`.trim();
+    const back = el('button', 'quiet', '다른 묵상 고르기'); back.type = 'button'; back.onclick = openShare;
+    box.append(back);
+    return;
+  }
+  note.textContent = 'PDF가 준비되었습니다.';
+  const buttons = el('div', 'buttons');
+  // 공유 창은 단추를 누른 그 순간에 열어야 하므로, PDF를 다 만든 뒤 한 번 더 누르게 한다
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    const send = el('button', '', '카카오톡 등으로 보내기'); send.type = 'button';
+    send.onclick = async () => {
+      try { await navigator.share({ files: [file], title: `${record.passage} 묵상` }); }
+      catch (e) { if (e.name !== 'AbortError') note.textContent = `보내지 못했습니다. ${e.message || ''}`.trim(); }
+    };
+    buttons.append(send);
+  }
+  const save = el('button', navigator.canShare ? 'quiet' : '', 'PDF 내려받기'); save.type = 'button';
+  save.onclick = () => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a'); a.href = url; a.download = file.name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+  const other = el('button', 'quiet', '다른 묵상 고르기'); other.type = 'button'; other.onclick = openShare;
+  buttons.append(save, other);
+  box.append(buttons);
+}
 
 /* 이 기기에만 있는 묵상을 일기장으로 옮기자고 청하는 상자 */
 function moveBox() {
