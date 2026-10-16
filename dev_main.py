@@ -65,6 +65,7 @@ def index():
 
 # 홈 화면에 추가할 때 쓰는 앱 정보와 아이콘 (암호 없이 열린다: 묵상 내용이 없다)
 APP_FILES = {
+    "config.js": "text/javascript",
     "manifest.webmanifest": "application/manifest+json",
     "apple-touch-icon.png": "image/png",
     "icon-192.png": "image/png",

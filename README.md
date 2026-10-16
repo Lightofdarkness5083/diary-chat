@@ -111,7 +111,20 @@ flowchart LR
 
 `main`에 합치면 Render가 자동으로 다시 배포한다.
 
-화면(`frontend/`)은 [Vercel](https://vercel.com)에도 올린다. Vercel 프로젝트의 Root Directory를 `frontend`로 두면 빌드 없이 그대로 올라간다. Vercel에서 연 화면은 Render 서버를 부르므로, Render의 `ALLOWED_ORIGINS`에 Vercel 주소를 적고 Firebase 로그인 허용 도메인에도 더한다.
+화면(`frontend/`)은 [Vercel](https://vercel.com)에 올린다. Vercel 프로젝트의 Root Directory를 `frontend`로 둔다. 올릴 때 `frontend/build.sh`가 한 번 돌아, Vercel 환경변수 `API_BASE_URL`(서버 주소)을 화면이 읽는 `config.js`로 적는다. 비어 있으면 화면은 기본 서버 주소를 쓴다.
+
+| 어디 | 환경변수 | 값 | 비밀인가 |
+| --- | --- | --- | --- |
+| Render (서버) | `ANTHROPIC_API_KEY` | Claude API 키 | 🔒 비밀 |
+| Render (서버) | `APP_PASSCODE` | 접속 암호 | 🔒 비밀 |
+| Render (서버) | `FIREBASE_SERVICE_ACCOUNT` | 서비스 계정 키 JSON | 🔒 비밀 |
+| Render (서버) | `FIREBASE_WEB_CONFIG` | Firebase 웹 앱 설정 JSON | 공개돼도 됨 |
+| Render (서버) | `ALLOWED_ORIGINS` | 화면 주소 (CORS 명단, 쉼표로 여럿) | 공개돼도 됨 |
+| Vercel (화면) | `API_BASE_URL` | 서버 주소 | 공개돼도 됨 |
+
+**비밀은 Vercel에 두지 않는다.** Vercel에 올린 화면과 그 환경변수는 휴대폰으로 그대로 내려가 누구나 볼 수 있다. 열쇠는 서버가 쥐고, 화면은 서버가 어디 있는지만 안다.
+
+Vercel에서 연 화면은 Render 서버를 부르므로, Render의 `ALLOWED_ORIGINS`에 Vercel 주소를 적고 Firebase 로그인 허용 도메인에도 더한다.
 
 iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막는다. 그래서 Vercel에서는 로그인 창도 앱과 같은 주소(`/__/auth/`)에서 열고, `frontend/vercel.json`이 그 요청을 Firebase로 넘겨준다. 이를 위해 Google Cloud 콘솔의 OAuth 클라이언트에 `https://<Vercel 주소>/__/auth/handler`를 승인된 리디렉션 URI로 더해 둔다.
 
