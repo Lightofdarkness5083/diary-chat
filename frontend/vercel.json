@@ -1,6 +1,14 @@
 {
+  "buildCommand": "sh build.sh",
+  "outputDirectory": ".",
   "rewrites": [
-    { "source": "/__/auth/:path*", "destination": "https://diary-with-jesus.firebaseapp.com/__/auth/:path*" },
-    { "source": "/__/firebase/:path*", "destination": "https://diary-with-jesus.firebaseapp.com/__/firebase/:path*" }
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://diary-with-jesus.firebaseapp.com/__/auth/:path*"
+    },
+    {
+      "source": "/__/firebase/:path*",
+      "destination": "https://diary-with-jesus.firebaseapp.com/__/firebase/:path*"
+    }
   ]
 }
