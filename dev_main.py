@@ -2,9 +2,11 @@
 
 묵상 부분(meditation)과 일기 비서(chat)를 연결하고, 화면(frontend/index.html)을 내어 준다.
 
-접속 암호: 환경변수 APP_PASSCODE를 정해 두면, 그 암호를 아는 사람만 묵상할 수 있다.
+문지기(gate.py): 일기장(Firebase)이 켜져 있으면 초대 명단(Firestore members)에 있는 Google 계정만
+묵상과 비서를 쓸 수 있고, 한 사람이 하루에 AI를 부르는 횟수에 높은 천장을 둔다.
 인터넷에 올리면 주소를 아는 누구나 들어올 수 있고, 묵상할 때마다 API 요금이 나가기 때문이다.
-내 컴퓨터에서 쓸 때는 정하지 않아도 된다.
+
+접속 암호: 환경변수 APP_PASSCODE를 정해 두면 그 암호도 함께 묻는다. 초대 명단을 쓰면 정하지 않는다.
 """
 import hmac
 import os
@@ -17,8 +19,10 @@ load_env()
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 import chat  # noqa: E402
+import gate  # noqa: E402
 import conversations  # noqa: E402
 import diary  # noqa: E402
 import meditation  # noqa: E402
@@ -37,6 +41,16 @@ async def check_passcode(request: Request, call_next):
         given = unquote(request.headers.get("x-passcode", ""))
         if not hmac.compare_digest(given.encode("utf-8"), passcode.encode("utf-8")):
             return JSONResponse({"error": "접속 암호가 맞지 않습니다."}, status_code=401)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def gatekeeper(request: Request, call_next):
+    # 초대받은 계정만, 하루 천장 안에서. 무엇을 지키는지는 gate.py에 있다
+    if request.method != "OPTIONS":
+        refused = await run_in_threadpool(gate.check, request.url.path, request.headers.get("authorization"))
+        if refused:
+            return JSONResponse(refused[1], status_code=refused[0])
     return await call_next(request)
 
 

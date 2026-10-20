@@ -554,7 +554,7 @@
     <p class="lead">묵상을 일기장에 적어 두고, 어느 기기에서나 이어서 펼쳐 봅니다.</p>
     <div class="buttons"><button type="button" id="sign-in">Google 계정으로 시작하기</button></div>
     <p class="notice" id="login-notice" role="alert"></p>
-    <p class="hint">일기장에는 로그인한 본인만 들어올 수 있습니다.</p>
+    <p class="hint">초대받은 Google 계정으로 시작합니다. 일기장에는 로그인한 본인만 들어올 수 있습니다.</p>
   </section>
 
   <!-- 안내: 이 일기장으로 묵상하는 법. 처음 한 번 보이고, 익숙한 사람은 넘긴다 -->
@@ -902,13 +902,25 @@ async function moveToDiary(status) {
   return { moved, failed };
 }
 
+/* 초대 명단에 없는 계정: 로그인을 풀고, 다른 계정으로 다시 시작하게 한다. 이 기기에 남은 것은 건드리지 않는다 */
+async function turnAway(message) {
+  account = null;
+  try { if (firebaseAuth) await firebaseAuth.signOut(); } catch (e) {}
+  store.only('dev-user', null);
+  document.getElementById('login-notice').textContent = message;
+  show('login');
+}
+
 /* 표지를 펼치고 들어온 뒤의 첫 쪽 */
 async function enterDiary() {
   if (appConfig.login && !account) { show('login'); return; }
   let problem = '';
   if (account) {
     try { await loadDiary(); }
-    catch (e) { problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`; }
+    catch (e) {
+      if (e.code === 'not_invited') { await turnAway(e.message); return; }
+      problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`;
+    }
   }
   renderHome(problem);
   show(store.read('guided', false) ? 'home' : 'guide');
@@ -1037,6 +1049,7 @@ async function request(path, options) {
     if (!response.ok) {
       const error = new Error(data.error || `서버 오류 (${response.status})`);
       error.status = response.status;
+      error.code = data.code || '';
       throw error;
     }
     return data;
