@@ -2,11 +2,11 @@
 
 묵상 부분(meditation)과 일기 비서(chat)를 연결하고, 화면(frontend/index.html)을 내어 준다.
 
-문지기(gate.py): 일기장(Firebase)이 켜져 있으면 초대 명단(Firestore members)에 있는 Google 계정만
-묵상과 비서를 쓸 수 있고, 한 사람이 하루에 AI를 부르는 횟수에 높은 천장을 둔다.
+문지기(gate.py): 일기장(Firebase)이 켜져 있으면 참여자 명단(Firestore members)에 있는 Google 계정만
+묵상과 비서를 쓸 수 있다. 처음 로그인한 사람은 선착순으로 명단에 들어온다. 한 사람이 하루에 AI를 부르는 횟수에 높은 천장을 둔다.
 인터넷에 올리면 주소를 아는 누구나 들어올 수 있고, 묵상할 때마다 API 요금이 나가기 때문이다.
 
-접속 암호: 환경변수 APP_PASSCODE를 정해 두면 그 암호도 함께 묻는다. 초대 명단을 쓰면 정하지 않는다.
+접속 암호: 환경변수 APP_PASSCODE를 정해 두면 그 암호도 함께 묻는다. 참여자 명단을 쓰면 정하지 않는다.
 """
 import hmac
 import os
@@ -16,7 +16,9 @@ from settings import ROOT, PromptMissing, load_env
 
 load_env()
 
-from fastapi import FastAPI, Request  # noqa: E402
+from typing import Optional  # noqa: E402
+
+from fastapi import FastAPI, Header, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from starlette.concurrency import run_in_threadpool  # noqa: E402
@@ -63,6 +65,13 @@ if ALLOWED_ORIGINS:
     app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
                        allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Authorization", "Content-Type", "X-Passcode"])
+
+
+@app.post("/api/join")
+def join(authorization: Optional[str] = Header(default=None)):
+    """처음 Google로 로그인한 사람을 참여자 명단에 넣는다 (선착순). gate.py"""
+    status, body = gate.join(authorization)
+    return JSONResponse(body, status_code=status)
 
 
 @app.exception_handler(PromptMissing)

@@ -56,14 +56,14 @@ def _connect():
                 claims = auth.verify_id_token(token, app=app)
             except Exception:
                 raise NotSignedIn()
-            return claims["uid"], claims.get("email", "")
+            return claims["uid"], claims.get("email", ""), claims.get("name", "")
 
         _state.update(store=FirestoreStore(firestore.client(app)), verify=verify, mode="firebase")
     elif os.environ.get("DIARY_DEV_LOGIN") == "1":
         def verify(token):                      # 시험용: "dev:이름"을 그대로 믿는다
             if not token.startswith("dev:") or len(token) < 5:
                 raise NotSignedIn()
-            return token[4:], token[4:] + "@dev"
+            return token[4:], token[4:] + "@dev", token[4:]
 
         _state.update(store=MemoryStore(), verify=verify, mode="dev")
     _state["ready"] = True
@@ -84,8 +84,8 @@ def store():
     return _state["store"]
 
 
-def who(authorization):
-    """Authorization 머리말에서 사용자를 확인해 (uid, email)을 돌려준다.
+def profile(authorization):
+    """Authorization 머리말에서 사용자를 확인해 {uid, email, name}을 돌려준다. name은 Google 계정의 이름이다.
     누구의 기록인지는 여기서만 정한다. 요청의 본문에 적힌 사용자 번호는 쓰지 않는다."""
     _connect()
     if _state["verify"] is None:
@@ -93,7 +93,14 @@ def who(authorization):
     kind, _, token = (authorization or "").partition(" ")
     if kind.lower() != "bearer" or not token.strip():
         raise NotSignedIn()
-    return _state["verify"](token.strip())
+    uid, email, name = _state["verify"](token.strip())
+    return {"uid": uid, "email": email, "name": name}
+
+
+def who(authorization):
+    """(uid, email)."""
+    found = profile(authorization)
+    return found["uid"], found["email"]
 
 
 def read_web_config(text):
