@@ -2,9 +2,11 @@
 
 묵상 부분(meditation)과 일기 비서(chat)를 연결하고, 화면(frontend/index.html)을 내어 준다.
 
-접속 암호: 환경변수 APP_PASSCODE를 정해 두면, 그 암호를 아는 사람만 묵상할 수 있다.
+문지기(gate.py): 일기장(Firebase)이 켜져 있으면 참여자 명단(Firestore members)에 있는 Google 계정만
+묵상과 비서를 쓸 수 있다. 처음 로그인한 사람은 선착순으로 명단에 들어온다. 한 사람이 하루에 AI를 부르는 횟수에 높은 천장을 둔다.
 인터넷에 올리면 주소를 아는 누구나 들어올 수 있고, 묵상할 때마다 API 요금이 나가기 때문이다.
-내 컴퓨터에서 쓸 때는 정하지 않아도 된다.
+
+접속 암호: 환경변수 APP_PASSCODE를 정해 두면 그 암호도 함께 묻는다. 참여자 명단을 쓰면 정하지 않는다.
 """
 import hmac
 import os
@@ -14,11 +16,15 @@ from settings import ROOT, PromptMissing, load_env
 
 load_env()
 
-from fastapi import FastAPI, Request  # noqa: E402
+from typing import Optional  # noqa: E402
+
+from fastapi import FastAPI, Header, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 import chat  # noqa: E402
+import gate  # noqa: E402
 import conversations  # noqa: E402
 import diary  # noqa: E402
 import meditation  # noqa: E402
@@ -40,6 +46,16 @@ async def check_passcode(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def gatekeeper(request: Request, call_next):
+    # 초대받은 계정만, 하루 천장 안에서. 무엇을 지키는지는 gate.py에 있다
+    if request.method != "OPTIONS":
+        refused = await run_in_threadpool(gate.check, request.url.path, request.headers.get("authorization"))
+        if refused:
+            return JSONResponse(refused[1], status_code=refused[0])
+    return await call_next(request)
+
+
 # 다른 주소의 화면(Vercel)이 이 서버를 부를 수 있게 하는 명단. 환경변수 ALLOWED_ORIGINS에 쉼표로 적는다.
 # 명단일 뿐 자물쇠가 아니다: 접속 암호와 로그인 확인은 그대로 한다.
 # 접속 암호 확인보다 뒤에 붙여야 바깥에서 먼저 받는다. 그래야 브라우저의 사전 문의(OPTIONS)에 답하고,
@@ -49,6 +65,13 @@ if ALLOWED_ORIGINS:
     app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
                        allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Authorization", "Content-Type", "X-Passcode"])
+
+
+@app.post("/api/join")
+def join(authorization: Optional[str] = Header(default=None)):
+    """처음 Google로 로그인한 사람을 참여자 명단에 넣는다 (선착순). gate.py"""
+    status, body = gate.join(authorization)
+    return JSONResponse(body, status_code=status)
 
 
 @app.exception_handler(PromptMissing)

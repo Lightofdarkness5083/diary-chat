@@ -244,6 +244,9 @@
   .pause::before, .pause::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
   .home-status { margin: 0.5rem 0 0.75rem; min-height: 1.75rem; text-align: center; font-family: var(--serif); font-size: 1.0625rem; }
   .home-status.notice-line { color: var(--pen); }
+  .guide-account { margin: 1.5rem 0 0.5rem; padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); }
+  .guide-account h2 { margin: 0 0 0.4rem; font-size: 1.0625rem; }
+  .guide-account p { margin: 0.25rem 0; }
   .today-word { display: block; margin: 0 auto; padding: 0.85rem 1rem; max-width: 20rem; border: 1px solid var(--line); border-radius: 12px; }
   .today-word .label { display: block; color: var(--muted); font-size: 0.875rem; }
   .today-word .ref { display: block; margin: 0.2rem 0; color: var(--pen); font-size: 1.5rem; font-weight: 700; }
@@ -576,9 +579,15 @@
     <div class="notes">
       <p>중간에 멈춰도 됩니다. 다시 열면 멈춘 곳에서 이어집니다.</p>
     </div>
+    <div class="guide-account" id="guide-account" hidden>
+      <h2>일기장을 내 것으로</h2>
+      <p>묵상은 내 Google 계정에 묶어 보관합니다. 다른 참여자는 볼 수 없고, 어느 기기에서나 이어서 펼칠 수 있습니다.</p>
+      <p class="hint">Google 계정으로 시작하면 이메일이 함께 등록됩니다. 따로 적지 않으셔도 됩니다.</p>
+    </div>
     <div class="buttons">
       <button type="button" id="guide-done">달력 펼치기</button>
     </div>
+    <p class="notice" id="guide-notice" role="alert"></p>
   </section>
 
   <!-- 본문 적는 쪽: 처음 묵상하거나, 다른 본문으로 묵상할 때 -->
@@ -766,8 +775,8 @@ const configReady = (async () => {
   }
 })();
 
-async function signIn() {
-  const notice = document.getElementById('login-notice');
+async function signIn(noticeId = 'login-notice') {
+  const notice = document.getElementById(noticeId);
   notice.textContent = '';
   try {
     if (appConfig.login === 'dev') {
@@ -789,6 +798,7 @@ async function signIn() {
       const user = firebaseAuth.currentUser;
       account = { uid: user.uid, email: user.email || '', token: () => user.getIdToken() };
     }
+    if (noticeId === 'guide-notice') store.write('guided', true);      // 안내를 보고 시작했다
     await enterDiary();
   } catch (e) {
     notice.textContent = `로그인하지 못했습니다. ${e.message || ''}`.trim();
@@ -902,16 +912,35 @@ async function moveToDiary(status) {
   return { moved, failed };
 }
 
+/* 처음 로그인한 사람을 참여자 명단에 넣는다 (선착순). 이미 있으면 그대로 */
+async function joinDiary() {
+  if (appConfig.login === 'google') await api('/api/join', {});
+}
+
+/* 참여자 명단에 없거나 자리가 찬 계정: 로그인을 풀고, 다른 계정으로 다시 시작하게 한다. 이 기기에 남은 것은 건드리지 않는다 */
+async function turnAway(message) {
+  account = null;
+  try { if (firebaseAuth) await firebaseAuth.signOut(); } catch (e) {}
+  store.only('dev-user', null);
+  document.getElementById('login-notice').textContent = message;
+  document.getElementById('guide-notice').textContent = message;
+  show(store.read('guided', false) ? 'login' : 'guide');
+}
+
 /* 표지를 펼치고 들어온 뒤의 첫 쪽 */
 let diaryLoading = null;      // 일기장을 읽어 오는 중이면 그 약속. 서버가 깨어나는 동안에는 1분쯤 걸린다
 async function enterDiary() {
-  if (appConfig.login && !account) { show('login'); return; }
+  if (appConfig.login && !account) { show(store.read('guided', false) ? 'login' : 'guide'); return; }   // 처음 온 사람은 안내부터
   const from = currentView;
   let problem = '';
   if (account) {
-    diaryLoading = loadDiary();
+    diaryLoading = (async () => { await joinDiary(); await loadDiary(); })();
     try { await diaryLoading; }
-    catch (e) { problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`; }
+    catch (e) {
+      diaryLoading = null;
+      if (e.code === 'not_invited' || e.code === 'full') { await turnAway(e.message); return; }
+      problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`;
+    }
     diaryLoading = null;
   }
   renderHome(problem);
@@ -941,6 +970,11 @@ const askBar = document.getElementById('ask-bar');
 
 function show(name) {
   currentView = name;
+  if (name === 'guide') {          // 로그인 전이면 안내의 끝에서 Google 계정으로 시작한다
+    const needAccount = !!appConfig.login && !account;
+    document.getElementById('guide-account').hidden = !needAccount;
+    document.getElementById('guide-done').textContent = needAccount ? 'Google 계정으로 시작하기' : '달력 펼치기';
+  }
   for (const [key, node] of Object.entries(views)) node.hidden = key !== name;
   if (name === 'home' || name === 'review') backTo = name;
   goHome.hidden = name === 'home' || name === 'review' || name === 'guide' || name === 'reviewGuide' || name === 'login';
@@ -1046,6 +1080,7 @@ async function request(path, options) {
     if (!response.ok) {
       const error = new Error(data.error || `서버 오류 (${response.status})`);
       error.status = response.status;
+      error.code = data.code || '';
       throw error;
     }
     return data;
@@ -2685,7 +2720,9 @@ show('home');
 
 /* ---- 표지와 안내 ---- */
 const cover = document.getElementById('cover');
-function leaveGuide() {
+/* 안내를 마치고: 로그인하지 않았으면 여기서 Google 계정으로 시작한다. 안내는 로그인이 끝난 뒤에야 '읽음'이 된다 */
+async function leaveGuide() {
+  if (appConfig.login && !account) { await signIn('guide-notice'); return; }
   store.write('guided', true); renderHome();
   if (firstTimer()) openEntry(); else show('home');          // 처음 온 사람은 안내를 지나 바로 본문 고르기로
 }

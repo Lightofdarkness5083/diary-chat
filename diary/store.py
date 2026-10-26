@@ -18,6 +18,7 @@ from .legacy import as_current
 from .schema import FIELDS
 
 RECORDS, STATES, CONVERSATIONS = "diaries", "diary_state", "conversations"
+MEMBERS, USAGE = "members", "usage"      # 참여자 명단 (문서 이름 = 이메일), 사람별·날짜별 AI 호출 수
 MAX_MESSAGES = 200        # 대화 하나에 담는 말의 수 (물음과 답 한 쌍이 한 쪽이니 100쪽)
 
 
@@ -67,6 +68,30 @@ class MemoryStore:
         self.records = {}     # 기록 번호 -> 문서
         self.states = {}      # uid -> 상태
         self.conversations = {}   # 대화 번호 -> 문서
+        self.members = None       # 명단 (이메일 -> 문서). None이면 문을 열어 둔다 (내 컴퓨터 시험)
+        self.usage = {}           # (uid, 날짜) -> 횟수
+
+    # ---- 문지기 ----
+    def find_member(self, email):
+        return None if self.members is None else self.members.get((email or "").strip().lower())
+
+    def is_member(self, email):
+        if self.members is None:
+            return True
+        found = self.find_member(email)
+        return found is not None and not found.get("disabled")
+
+    def add_member(self, email, doc):
+        if self.members is None:
+            self.members = {}
+        self.members[email.strip().lower()] = dict(doc)
+
+    def count_members(self):
+        return 0 if self.members is None else len(self.members)
+
+    def count_use(self, uid, day):
+        self.usage[(uid, day)] = self.usage.get((uid, day), 0) + 1
+        return self.usage[(uid, day)]
 
     def _mine(self, uid, record_id):
         stored = self.records.get(record_id)
@@ -147,6 +172,35 @@ class FirestoreStore:
 
     def __init__(self, client):
         self.db = client
+
+    # ---- 문지기 ----
+    def find_member(self, email):
+        """members/{이메일} 문서. 없으면 None."""
+        email = (email or "").strip().lower()
+        if not email:
+            return None
+        snapshot = self.db.collection(MEMBERS).document(email).get()
+        return (snapshot.to_dict() or {}) if snapshot.exists else None
+
+    def is_member(self, email):
+        """명단에 있고 disabled가 참이 아니면 들어올 수 있다. 관리자는 Firebase 콘솔에서 disabled: true로 막는다."""
+        found = self.find_member(email)
+        return found is not None and not found.get("disabled")
+
+    def add_member(self, email, doc):
+        self.db.collection(MEMBERS).document(email.strip().lower()).set(dict(doc))
+
+    def count_members(self):
+        """막아 둔 사람(disabled)도 자리를 차지한 것으로 센다."""
+        return sum(1 for _ in self.db.collection(MEMBERS).stream())
+
+    def count_use(self, uid, day):
+        """오늘 이 사람이 AI를 부른 횟수에 하나를 더하고, 더한 뒤의 수를 돌려준다. 사고를 막는 천장에 쓴다."""
+        ref = self.db.collection(USAGE).document(f"{uid}_{day}")
+        snapshot = ref.get()
+        count = ((snapshot.to_dict() or {}).get("count", 0) if snapshot.exists else 0) + 1
+        ref.set({"uid": uid, "day": day, "count": count})
+        return count
 
     def _doc(self, record_id):
         return self.db.collection(RECORDS).document(record_id)
