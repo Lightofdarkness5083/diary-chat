@@ -928,18 +928,24 @@ async function turnAway(message) {
 }
 
 /* 표지를 펼치고 들어온 뒤의 첫 쪽 */
+let diaryLoading = null;      // 일기장을 읽어 오는 중이면 그 약속. 서버가 깨어나는 동안에는 1분쯤 걸린다
 async function enterDiary() {
   if (appConfig.login && !account) { show(store.read('guided', false) ? 'login' : 'guide'); return; }   // 처음 온 사람은 안내부터
+  const from = currentView;
   let problem = '';
   if (account) {
-    try { await joinDiary(); await loadDiary(); }
+    diaryLoading = (async () => { await joinDiary(); await loadDiary(); })();
+    try { await diaryLoading; }
     catch (e) {
+      diaryLoading = null;
       if (e.code === 'not_invited' || e.code === 'full') { await turnAway(e.message); return; }
       problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`;
     }
+    diaryLoading = null;
   }
   renderHome(problem);
-  show(store.read('guided', false) ? 'home' : 'guide');
+  // 읽어 오는 사이에 묵상을 시작했거나 다른 쪽을 열었으면 그 화면을 빼앗지 않는다
+  if (currentView === from || currentView === 'home' || currentView === 'login') show(store.read('guided', false) ? 'home' : 'guide');
 }
 
 /* ---- 화면 바꾸기 ---- */
@@ -1622,6 +1628,10 @@ async function startToday() {
   if (starting) return;
   starting = true;
   try {
+    if (diaryLoading) {        // 일기장을 다 읽은 뒤에 시작한다: 다른 기기에서 한 묵상과 멈춘 자리를 먼저 맞춘다
+      homeStatus.textContent = '일기장을 펼치는 중입니다…';
+      try { await diaryLoading; } catch (e) {}
+    }
     if (draft) await resumeMeditation();
     else if (planned) await beginMeditation(planned.ref, planned.mode);
     else await continueNext();
@@ -2744,18 +2754,31 @@ new ResizeObserver(() => {
 }).observe(composer);
 
 /* 자판이 올라오면 글 쓰는 자리도 자판 바로 위로 올린다.
-   보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다 */
+   보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다.
+   손가락으로 화면을 밀 때도 주소창이 줄었다 늘었다 하며 이 차이가 잠깐 생긴다. 그때마다 여백을 바꾸고
+   맨 아래로 끌어내리면 화면이 떨린다. 그래서 글 쓰는 칸을 누르고 있고, 차이가 자판만큼 클 때만 올린다 */
 if (window.visualViewport) {
   const vv = window.visualViewport;
+  const KEYBOARD_AT_LEAST = 150;        // 주소창(50~90px)보다 크고 자판(250px 넘음)보다 작은 값
+  let lifted = 0;
+  const writing = () => {
+    const a = document.activeElement;
+    return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['button', 'checkbox', 'radio'].includes(a.type)));
+  };
   const lift = () => {
-    const gap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    const raw = Math.round(window.innerHeight - vv.height - vv.offsetTop);
+    const gap = writing() && raw >= KEYBOARD_AT_LEAST ? raw : 0;
+    if (gap === lifted) return;            // 바뀐 것이 없으면 아무것도 건드리지 않는다
     const wasAtEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+    lifted = gap;
     composer.style.bottom = askBar.style.bottom = gap ? gap + 'px' : '';
     document.documentElement.style.setProperty('--keyboard', gap + 'px');
-    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 마지막 질문이 보이게
+    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 자판이 막 올라왔을 때 한 번만: 마지막 말이 보이게
   };
   vv.addEventListener('resize', lift);
   vv.addEventListener('scroll', lift);
+  document.addEventListener('focusin', lift);
+  document.addEventListener('focusout', () => setTimeout(lift, 50));
 }
 </script>
 </body>
