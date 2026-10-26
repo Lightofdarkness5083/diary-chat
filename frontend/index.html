@@ -1864,7 +1864,7 @@ function renderHome(notice, finishedBook) {
     const close = el('button', '', '책 덮기'); close.type = 'button';
     close.onclick = () => { renderHome(); show('home'); closeBook(''); };
     homeAction.append(close);
-  } else if (progress || draft || planned) {    // 들어갈 때: 본문을 정한다. 할 일은 메뉴와 떨어진 단추로
+  } else if (progress || draft || planned || !records.length) {    // 들어갈 때: 본문을 정한다 (처음 온 사람도). 할 일은 메뉴와 떨어진 단추로
     const other = el('button', 'quiet', '다른 본문으로 묵상하기'); other.type = 'button';
     other.onclick = () => {
       if (draft && !window.confirm(`하던 ${draft.ref} 묵상을 지우고 다른 본문으로 시작할까요?`)) return;
