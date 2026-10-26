@@ -903,15 +903,20 @@ async function moveToDiary(status) {
 }
 
 /* 표지를 펼치고 들어온 뒤의 첫 쪽 */
+let diaryLoading = null;      // 일기장을 읽어 오는 중이면 그 약속. 서버가 깨어나는 동안에는 1분쯤 걸린다
 async function enterDiary() {
   if (appConfig.login && !account) { show('login'); return; }
+  const from = currentView;
   let problem = '';
   if (account) {
-    try { await loadDiary(); }
+    diaryLoading = loadDiary();
+    try { await diaryLoading; }
     catch (e) { problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`; }
+    diaryLoading = null;
   }
   renderHome(problem);
-  show(store.read('guided', false) ? 'home' : 'guide');
+  // 읽어 오는 사이에 묵상을 시작했거나 다른 쪽을 열었으면 그 화면을 빼앗지 않는다
+  if (currentView === from || currentView === 'home' || currentView === 'login') show(store.read('guided', false) ? 'home' : 'guide');
 }
 
 /* ---- 화면 바꾸기 ---- */
@@ -1588,6 +1593,10 @@ async function startToday() {
   if (starting) return;
   starting = true;
   try {
+    if (diaryLoading) {        // 일기장을 다 읽은 뒤에 시작한다: 다른 기기에서 한 묵상과 멈춘 자리를 먼저 맞춘다
+      homeStatus.textContent = '일기장을 펼치는 중입니다…';
+      try { await diaryLoading; } catch (e) {}
+    }
     if (draft) await resumeMeditation();
     else if (planned) await beginMeditation(planned.ref, planned.mode);
     else await continueNext();
