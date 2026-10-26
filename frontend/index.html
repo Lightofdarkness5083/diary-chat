@@ -916,7 +916,11 @@ async function enterDiary() {
   }
   renderHome(problem);
   // 읽어 오는 사이에 묵상을 시작했거나 다른 쪽을 열었으면 그 화면을 빼앗지 않는다
-  if (currentView === from || currentView === 'home' || currentView === 'login') show(store.read('guided', false) ? 'home' : 'guide');
+  if (currentView === from || currentView === 'home' || currentView === 'login') {
+    if (!store.read('guided', false)) show('guide');
+    else if (firstTimer()) openEntry();                      // 아직 한 번도 묵상하지 않았으면 본문 고르기부터
+    else show('home');
+  }
 }
 
 /* ---- 화면 바꾸기 ---- */
@@ -1575,6 +1579,7 @@ async function lookAheadToday() {
 
 /* "이어서 묵상": 하던 책의 다음 절부터 한 단락을 골라 바로 묵상을 시작한다 */
 const FIRST_PASSAGE = '시편 23:1-6';     // 처음 묵상하는 사람의 첫 말씀. 누구에게나 좋은 말씀으로 시작한다
+function firstTimer() { return !records.length && !progress && !draft && !planned; }
 async function continueNext() {
   if (!progress && !records.length) { await beginMeditation(FIRST_PASSAGE, 'continue'); return; }
   if (!progress) { openEntry('묵상할 본문을 적거나 아래에서 고르세요.'); return; }
@@ -1623,15 +1628,19 @@ function passageForm() {
   const form = document.createElement('form');
   form.className = 'passage-form';
   const input = document.createElement('input');
-  input.id = 'ref'; input.autocomplete = 'off'; input.required = true;
+  input.id = 'ref'; input.autocomplete = 'off';
   input.setAttribute('aria-label', '묵상할 본문');
+  // 처음 묵상하는 사람: 칸에 엷게 시편 23:1-6을 보이고, 비운 채 [묵상하기]를 누르면 그 말씀으로 시작한다
+  const suggested = firstTimer() ? FIRST_PASSAGE : '';
+  if (suggested) input.placeholder = suggested;
+  else input.required = true;
   const button = el('button', '', '묵상하기'); button.type = 'submit';
   const row = el('div', 'row'); row.append(input, button);
   const notice = el('p', 'notice form-notice'); notice.setAttribute('role', 'alert');
   const example = el('p', 'hint example',
     '예: 시편 23:1-6, 골로새서 3:18-4:1');
   form.append(row, example, notice);
-  form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value, notice, button); });
+  form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value.trim() || suggested, notice, button); });
   return form;
 }
 
@@ -2641,7 +2650,10 @@ show('home');
 
 /* ---- 표지와 안내 ---- */
 const cover = document.getElementById('cover');
-function leaveGuide() { store.write('guided', true); renderHome(); show('home'); }
+function leaveGuide() {
+  store.write('guided', true); renderHome();
+  if (firstTimer()) openEntry(); else show('home');          // 처음 온 사람은 안내를 지나 바로 본문 고르기로
+}
 document.getElementById('guide-done').onclick = leaveGuide;
 document.getElementById('skip-guide').onclick = leaveGuide;
 const coverNote = document.getElementById('cover-note');
