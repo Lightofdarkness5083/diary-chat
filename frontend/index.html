@@ -1497,7 +1497,7 @@ function discardDraft() { draft = null; store.write('draft', null); }
    "에베소서 1:1-2" 또는 "골로새서 3:18-4:1"   시작 절과 끝 절까지 적은 본문으로 묵상한다
    "이어서 묵상"                               하던 책의 다음 단락으로 바로 묵상한다 */
 const CONTINUE_WORDS = /^(이어서|이어|계속|다음)/;
-const HOW_TO_WRITE = '본문을 시작 절과 끝 절까지 적어 주세요. 예: 에베소서 1:1-2, 골로새서 3:18-4:1';
+const HOW_TO_WRITE = '본문을 시작 절과 끝 절까지 적어 주세요. 예: 시편 23:1-6, 골로새서 3:18-4:1';
 
 /* 적은 글이 본문인지 가려낸다: 책 이름 뒤에 장:절-절 또는 장:절-장:절이 오고, 그 밖의 말이 없어야 한다 */
 const REFERENCE = /^\S.{0,12}?\s*\d+\s*[:장]\s*\d+\s*절?\s*[-~–—]\s*(\d+\s*[:장]\s*)?\d+\s*절?$/;
@@ -1611,7 +1611,7 @@ async function startToday() {
 /* 본문 적는 쪽을 연다. viaCalendar: 적고 나면 달력으로 돌아가 오늘을 눌러 들어간다 */
 function openEntry(lead, viaCalendar = false) {
   planning = viaCalendar;
-  document.getElementById('entry-lead').textContent = lead || '오늘 묵상할 본문을 적어 주세요. 계속 본문을 이어 간다면 아래의 단락을 선택하세요.';
+  document.getElementById('entry-lead').textContent = lead || '오늘 묵상할 본문을 적어 주세요.';
   document.getElementById('entry-form').replaceChildren(passageForm());
   showBrowse();
   show('entry');
@@ -1624,13 +1624,12 @@ function passageForm() {
   form.className = 'passage-form';
   const input = document.createElement('input');
   input.id = 'ref'; input.autocomplete = 'off'; input.required = true;
-  input.placeholder = '시편 23:1-6';
   input.setAttribute('aria-label', '묵상할 본문');
   const button = el('button', '', '묵상하기'); button.type = 'submit';
   const row = el('div', 'row'); row.append(input, button);
   const notice = el('p', 'notice form-notice'); notice.setAttribute('role', 'alert');
   const example = el('p', 'hint example',
-    '예: 에베소서 1:1-2, 골로새서 3:18-4:1');
+    '예: 시편 23:1-6, 골로새서 3:18-4:1');
   form.append(row, example, notice);
   form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value, notice, button); });
   return form;
@@ -1666,7 +1665,7 @@ async function showBooks() {
     catch (e) { return; }               // 책 목록을 받지 못해도 본문 칸으로 묵상할 수 있다
   }
   const meditated = new Set(records.map(r => r.book));
-  browseBox.replaceChildren(browseHead('책에서 고르기'));
+  browseBox.replaceChildren(browseHead('계속 본문을 이어 간다면 책에서 선택해 주세요.'));
   for (const testament of ['구약', '신약']) {
     browseBox.append(el('p', 'testament', testament));
     const grid = el('div', 'books');
