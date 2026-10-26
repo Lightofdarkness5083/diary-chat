@@ -1122,13 +1122,15 @@ function renderBlock(box, block) {
 function renderGuide(text) {
   const box = el('div', 'guide');
   const parts = text.split(/\[\[\s*([^\[\]]{1,30}?)\s*\]\]/);
-  const shown = new Set();                 // 이 말에서 이미 카드로 보인 절
+  const shown = new Set();                 // 이 말에서 표시로 카드가 붙는 절. 글이 표시보다 앞에서 말해도 두 번 붙이지 않게 먼저 모은다
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) for (const v of part.includes('본문') ? (passage ? passage.verses : []) : versesIn(part)) shown.add(v);
+  });
   let added = 0;
   parts.forEach((part, i) => {
     if (i % 2 === 1) {
       const card = markedPassage(part);
       if (card) box.append(card);
-      for (const v of part.includes('본문') ? (passage ? passage.verses : []) : versesIn(part)) shown.add(v);
       return;
     }
     for (const block of part.split(/\n{2,}/)) {
