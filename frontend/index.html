@@ -1574,7 +1574,9 @@ async function lookAheadToday() {
 }
 
 /* "이어서 묵상": 하던 책의 다음 절부터 한 단락을 골라 바로 묵상을 시작한다 */
+const FIRST_PASSAGE = '시편 23:1-6';     // 처음 묵상하는 사람의 첫 말씀. 누구에게나 좋은 말씀으로 시작한다
 async function continueNext() {
+  if (!progress && !records.length) { await beginMeditation(FIRST_PASSAGE, 'continue'); return; }
   if (!progress) { openEntry('묵상할 본문을 적거나 아래에서 고르세요.'); return; }
   if (!rememberedNext()) homeStatus.textContent = '다음 단락을 찾고 있습니다…';
   const next = await findNext();
@@ -1622,7 +1624,7 @@ function passageForm() {
   form.className = 'passage-form';
   const input = document.createElement('input');
   input.id = 'ref'; input.autocomplete = 'off'; input.required = true;
-  input.placeholder = '골로새서 3:18-4:1';
+  input.placeholder = '시편 23:1-6';
   input.setAttribute('aria-label', '묵상할 본문');
   const button = el('button', '', '묵상하기'); button.type = 'submit';
   const row = el('div', 'row'); row.append(input, button);
@@ -1853,6 +1855,7 @@ function renderHome(notice, finishedBook) {
       lookAheadToday();
     }
   }
+  else if (!records.length) showTodayWord(FIRST_PASSAGE);       // 처음 묵상하는 사람
   else homeStatus.textContent = '오늘을 눌러 묵상을 시작하세요.';
 
   homeLinks.replaceChildren();
