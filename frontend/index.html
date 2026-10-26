@@ -916,7 +916,11 @@ async function enterDiary() {
   }
   renderHome(problem);
   // 읽어 오는 사이에 묵상을 시작했거나 다른 쪽을 열었으면 그 화면을 빼앗지 않는다
-  if (currentView === from || currentView === 'home' || currentView === 'login') show(store.read('guided', false) ? 'home' : 'guide');
+  if (currentView === from || currentView === 'home' || currentView === 'login') {
+    if (!store.read('guided', false)) show('guide');
+    else if (firstTimer()) openEntry();                      // 아직 한 번도 묵상하지 않았으면 본문 고르기부터
+    else show('home');
+  }
 }
 
 /* ---- 화면 바꾸기 ---- */
@@ -1532,7 +1536,7 @@ function discardDraft() { draft = null; store.write('draft', null); }
    "에베소서 1:1-2" 또는 "골로새서 3:18-4:1"   시작 절과 끝 절까지 적은 본문으로 묵상한다
    "이어서 묵상"                               하던 책의 다음 단락으로 바로 묵상한다 */
 const CONTINUE_WORDS = /^(이어서|이어|계속|다음)/;
-const HOW_TO_WRITE = '본문을 시작 절과 끝 절까지 적어 주세요. 예: 에베소서 1:1-2, 골로새서 3:18-4:1';
+const HOW_TO_WRITE = '본문을 시작 절과 끝 절까지 적어 주세요. 예: 시편 23:1-6, 골로새서 3:18-4:1';
 
 /* 적은 글이 본문인지 가려낸다: 책 이름 뒤에 장:절-절 또는 장:절-장:절이 오고, 그 밖의 말이 없어야 한다 */
 const REFERENCE = /^\S.{0,12}?\s*\d+\s*[:장]\s*\d+\s*절?\s*[-~–—]\s*(\d+\s*[:장]\s*)?\d+\s*절?$/;
@@ -1609,7 +1613,10 @@ async function lookAheadToday() {
 }
 
 /* "이어서 묵상": 하던 책의 다음 절부터 한 단락을 골라 바로 묵상을 시작한다 */
+const FIRST_PASSAGE = '시편 23:1-6';     // 처음 묵상하는 사람의 첫 말씀. 누구에게나 좋은 말씀으로 시작한다
+function firstTimer() { return !records.length && !progress && !draft && !planned; }
 async function continueNext() {
+  if (!progress && !records.length) { await beginMeditation(FIRST_PASSAGE, 'continue'); return; }
   if (!progress) { openEntry('묵상할 본문을 적거나 아래에서 고르세요.'); return; }
   if (!rememberedNext()) homeStatus.textContent = '다음 단락을 찾고 있습니다…';
   const next = await findNext();
@@ -1644,7 +1651,7 @@ async function startToday() {
 /* 본문 적는 쪽을 연다. viaCalendar: 적고 나면 달력으로 돌아가 오늘을 눌러 들어간다 */
 function openEntry(lead, viaCalendar = false) {
   planning = viaCalendar;
-  document.getElementById('entry-lead').textContent = lead || '오늘 묵상할 본문을 적어 주세요. 계속 본문을 이어 간다면 아래의 단락을 선택하세요.';
+  document.getElementById('entry-lead').textContent = lead || '오늘 묵상할 본문을 적어 주세요.';
   document.getElementById('entry-form').replaceChildren(passageForm());
   showBrowse();
   show('entry');
@@ -1656,16 +1663,19 @@ function passageForm() {
   const form = document.createElement('form');
   form.className = 'passage-form';
   const input = document.createElement('input');
-  input.id = 'ref'; input.autocomplete = 'off'; input.required = true;
-  input.placeholder = '골로새서 3:18-4:1';
+  input.id = 'ref'; input.autocomplete = 'off';
   input.setAttribute('aria-label', '묵상할 본문');
+  // 처음 묵상하는 사람: 칸에 엷게 시편 23:1-6을 보이고, 비운 채 [묵상하기]를 누르면 그 말씀으로 시작한다
+  const suggested = firstTimer() ? FIRST_PASSAGE : '';
+  if (suggested) input.placeholder = suggested;
+  else input.required = true;
   const button = el('button', '', '묵상하기'); button.type = 'submit';
   const row = el('div', 'row'); row.append(input, button);
   const notice = el('p', 'notice form-notice'); notice.setAttribute('role', 'alert');
   const example = el('p', 'hint example',
-    '예: 에베소서 1:1-2, 골로새서 3:18-4:1');
+    '예: 시편 23:1-6, 골로새서 3:18-4:1');
   form.append(row, example, notice);
-  form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value, notice, button); });
+  form.addEventListener('submit', (event) => { event.preventDefault(); submitPassage(input.value.trim() || suggested, notice, button); });
   return form;
 }
 
@@ -1699,7 +1709,7 @@ async function showBooks() {
     catch (e) { return; }               // 책 목록을 받지 못해도 본문 칸으로 묵상할 수 있다
   }
   const meditated = new Set(records.map(r => r.book));
-  browseBox.replaceChildren(browseHead('책에서 고르기'));
+  browseBox.replaceChildren(browseHead('계속 본문을 이어 간다면 책에서 선택해 주세요.'));
   for (const testament of ['구약', '신약']) {
     browseBox.append(el('p', 'testament', testament));
     const grid = el('div', 'books');
@@ -1888,6 +1898,7 @@ function renderHome(notice, finishedBook) {
       lookAheadToday();
     }
   }
+  else if (!records.length) showTodayWord(FIRST_PASSAGE);       // 처음 묵상하는 사람
   else homeStatus.textContent = '오늘을 눌러 묵상을 시작하세요.';
 
   homeLinks.replaceChildren();
@@ -1896,7 +1907,7 @@ function renderHome(notice, finishedBook) {
     const close = el('button', '', '책 덮기'); close.type = 'button';
     close.onclick = () => { renderHome(); show('home'); closeBook(''); };
     homeAction.append(close);
-  } else if (progress || draft || planned) {    // 들어갈 때: 본문을 정한다. 할 일은 메뉴와 떨어진 단추로
+  } else if (progress || draft || planned || !records.length) {    // 들어갈 때: 본문을 정한다 (처음 온 사람도). 할 일은 메뉴와 떨어진 단추로
     const other = el('button', 'quiet', '다른 본문으로 묵상하기'); other.type = 'button';
     other.onclick = () => {
       if (draft && !window.confirm(`하던 ${draft.ref} 묵상을 지우고 다른 본문으로 시작할까요?`)) return;
@@ -2674,7 +2685,10 @@ show('home');
 
 /* ---- 표지와 안내 ---- */
 const cover = document.getElementById('cover');
-function leaveGuide() { store.write('guided', true); renderHome(); show('home'); }
+function leaveGuide() {
+  store.write('guided', true); renderHome();
+  if (firstTimer()) openEntry(); else show('home');          // 처음 온 사람은 안내를 지나 바로 본문 고르기로
+}
 document.getElementById('guide-done').onclick = leaveGuide;
 document.getElementById('skip-guide').onclick = leaveGuide;
 const coverNote = document.getElementById('cover-note');
