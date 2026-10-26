@@ -2715,18 +2715,31 @@ new ResizeObserver(() => {
 }).observe(composer);
 
 /* 자판이 올라오면 글 쓰는 자리도 자판 바로 위로 올린다.
-   보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다 */
+   보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다.
+   손가락으로 화면을 밀 때도 주소창이 줄었다 늘었다 하며 이 차이가 잠깐 생긴다. 그때마다 여백을 바꾸고
+   맨 아래로 끌어내리면 화면이 떨린다. 그래서 글 쓰는 칸을 누르고 있고, 차이가 자판만큼 클 때만 올린다 */
 if (window.visualViewport) {
   const vv = window.visualViewport;
+  const KEYBOARD_AT_LEAST = 150;        // 주소창(50~90px)보다 크고 자판(250px 넘음)보다 작은 값
+  let lifted = 0;
+  const writing = () => {
+    const a = document.activeElement;
+    return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['button', 'checkbox', 'radio'].includes(a.type)));
+  };
   const lift = () => {
-    const gap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    const raw = Math.round(window.innerHeight - vv.height - vv.offsetTop);
+    const gap = writing() && raw >= KEYBOARD_AT_LEAST ? raw : 0;
+    if (gap === lifted) return;            // 바뀐 것이 없으면 아무것도 건드리지 않는다
     const wasAtEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+    lifted = gap;
     composer.style.bottom = askBar.style.bottom = gap ? gap + 'px' : '';
     document.documentElement.style.setProperty('--keyboard', gap + 'px');
-    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 마지막 질문이 보이게
+    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 자판이 막 올라왔을 때 한 번만: 마지막 말이 보이게
   };
   vv.addEventListener('resize', lift);
   vv.addEventListener('scroll', lift);
+  document.addEventListener('focusin', lift);
+  document.addEventListener('focusout', () => setTimeout(lift, 50));
 }
 </script>
 </body>
