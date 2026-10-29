@@ -1572,6 +1572,14 @@ function rememberedNext() {
   return kept && kept.key === nextKey() ? kept.next : null;
 }
 async function findNext() {
+  const next = await lookNext();
+  if (next.finished && progress && !progress.done) {      // 책을 끝까지 마쳤다: 책갈피에 "다 읽음"을 붙인다. 다음에 저장하는 본문이 새 책갈피가 된다
+    progress = { ...progress, done: true };
+    store.write('progress', progress);
+  }
+  return next;
+}
+async function lookNext() {
   const remembered = rememberedNext();
   if (remembered) return remembered;
   const key = nextKey();
@@ -2642,7 +2650,7 @@ async function keepRecord(record) {
     catch (e) { problem = e.message; }
   }
   discardDraft();
-  const ahead = !progress || currentMode === 'continue' ||
+  const ahead = !progress || progress.done || currentMode === 'continue' ||    // 다 읽은 책이면 새로 고른 책으로 책갈피를 옮긴다
     (progress.book === record.book && (record.chapter_start > progress.chapter ||
       (record.chapter_start === progress.chapter && record.verse_start > progress.verse)));
   if (ahead) {     // 함께 읽는 다른 책의 본문을 직접 적은 날은, 묵상 중인 책의 자리를 그대로 둔다
