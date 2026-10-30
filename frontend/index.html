@@ -1247,20 +1247,27 @@ function waitingMark(label) {
 
 /* resume: 멈췄다가 돌아온 직후의 첫 호출. 묵상자의 글 없이, 인도자가 어디까지 했는지 짚고 이어 간다. */
 async function send(message, resume = false) {
+  const mine = draft;       // 이 글을 보낸 묵상. 답이 늦게 와서 그사이 다른 묵상이 열렸으면 그 답은 버린다
   setBusy(true);
   const waiting = waitingMark('인도자가 쓰고 있습니다');
   thread.append(waiting);
   waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  if (mine && message) {    // 답을 받기 전에 앱이 닫혀도, 다시 열면 이 글이 글 칸에 돌아온다
+    mine.pending = message;
+    mine.unsent = messageBox.value;
+    store.write('draft', mine);
+  }
   try {
     // expect: 지금까지 주고받은 수. 연결이 끊겨 같은 글이 두 번 가도 서버가 가려낸다
-    const expect = draft ? (draft.messages.length ? draft.messages.length + 1 : 0) : null;
+    const expect = mine ? (mine.messages.length ? mine.messages.length + 1 : 0) : null;
     const data = await withSession(() =>
       api('/api/meditation/chat', { session_id: sessionId, message, resume, expect }));
-    if (draft) {            // 주고받은 것을 기기에 보관해 둔다. 나중에 이어서 할 수 있게
-      if (resume) draft.messages.push({ role: 'user', hidden: 'resume' });
-      else if (message) draft.messages.push({ role: 'user', content: message });
-      draft.messages.push({ role: 'assistant', content: data.reply });
-      store.write('draft', draft);
+    if (draft !== mine) return;      // 늦게 온 지난 묵상의 답: 지금 묵상에 섞지 않는다
+    if (mine) {             // 주고받은 것을 기기에 보관해 둔다. 나중에 이어서 할 수 있게
+      if (resume) mine.messages.push({ role: 'user', hidden: 'resume' });
+      else if (message) { mine.messages.push({ role: 'user', content: message }); delete mine.pending; }
+      mine.messages.push({ role: 'assistant', content: data.reply });
+      store.write('draft', mine);
     }
     const reply = renderGuide(data.reply);
     waiting.replaceWith(reply);
@@ -1273,6 +1280,7 @@ async function send(message, resume = false) {
       messageBox.focus({ preventScroll: true });
     }
   } catch (e) {
+    if (draft !== mine) return;      // 지난 묵상의 실패: 지금 묵상 화면에 띄우지 않는다
     const failed = el('div', 'failed');
     failed.setAttribute('role', 'alert');
     const retry = el('button', '', '다시 보내기');
@@ -1472,14 +1480,17 @@ function recordCard(record, past) {
   return card;
 }
 
-async function showRecord() {
+/* requestId: 이번 정리 요청의 번호. [다시 정리하기]는 같은 번호로 보낸다.
+   답이 오는 길에 연결만 끊겼으면, 서버는 AI를 다시 부르지 않고 이미 만든 정리를 돌려준다 */
+async function showRecord(requestId = newId()) {
   showComposer(false);
   wrapUpLink.hidden = true;
   const waiting = waitingMark('묵상 기록을 정리하고 있습니다');
   thread.append(waiting);
   waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
   try {
-    const record = await withSession(() => api('/api/meditation/record', { session_id: sessionId }));
+    const record = await withSession(() =>
+      api('/api/meditation/record', { session_id: sessionId, request_id: requestId }));
     const card = recordCard(record);
     waiting.replaceWith(card);
     card.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -1488,7 +1499,7 @@ async function showRecord() {
     failed.setAttribute('role', 'alert');
     const retry = el('button', '', '다시 정리하기');
     retry.type = 'button';
-    retry.onclick = () => { failed.remove(); showRecord(); };
+    retry.onclick = () => { failed.remove(); showRecord(requestId); };
     const back = el('button', 'quiet', '묵상으로 돌아가기');
     back.type = 'button';
     back.onclick = () => { failed.remove(); showComposer(true); wrapUpLink.hidden = false; };
@@ -1550,9 +1561,15 @@ async function resumeMeditation() {
   }
   thread.append(el('p', 'pause', '잠시 멈추었다가 이어서'));
   wrapUpLink.hidden = sentCount < 6;
-  messageBox.value = '';
+  // 보냈는데 답을 받지 못한 글, 적다가 멈춘 글을 글 칸에 돌려놓는다
+  const kept = [draft.pending, draft.unsent].filter(t => t && t.trim()).join('\n');
+  delete draft.pending;
+  draft.unsent = kept;
+  store.only('draft', draft);
+  messageBox.value = kept;
   show('thread');
   composer.hidden = false;
+  resizeMessageBox();
   send(null, true);
 }
 
@@ -2593,8 +2610,8 @@ function renderReview() {
     const failed = el('div', 'failed');
     failed.setAttribute('role', 'alert');
     const retry = el('button', '', '다시 묻기'); retry.type = 'button';
-    const q = pending.q;
-    retry.onclick = () => { pending = null; ask(q); };
+    const q = pending.q, id = pending.id;
+    retry.onclick = () => { pending = null; ask(q, id); };
     failed.append(el('p', '', `답을 받지 못했습니다. ${pending.failed}`), retry);
     reviewPage.append(failed);
     return;
@@ -2633,11 +2650,14 @@ function openReview() {
   show('review');
 }
 
-async function ask(question) {
+/* requestId: 이 물음의 번호. [다시 묻기]는 같은 번호로 보낸다. 답이 오는 길에 연결만 끊겼으면
+   서버는 다시 답을 만들거나 대화에 두 번 남기지 않고, 처음 답을 돌려준다 */
+async function ask(question, requestId = newId()) {
   question = question.trim();
   if (!question || (pending && !pending.failed)) return;
   if (currentView !== 'review') show('review');
-  pending = { q: question, failed: null };
+  pending = { q: question, id: requestId, failed: null };
+  const mine = pending;
   clearing = false;
   openPage(reviewPages.length + 1);
   const remembered = reviewPages.slice(-REMEMBER_PAGES).flatMap(p => [{ role: 'user', content: p.q }, { role: 'assistant', content: p.a }]);
@@ -2645,7 +2665,8 @@ async function ask(question) {
     // 일기장에 로그인했으면 서버가 일기장에서 기록을 읽는다. 기록은 보내지 않는다
     const data = await api('/api/chat', { messages: [...remembered, { role: 'user', content: question }],
                                           records: account ? [] : records, today: todayKey,
-                                          conversation_id: reviewConversation || '' });
+                                          conversation_id: reviewConversation || '', request_id: requestId });
+    if (pending !== mine) return;      // 기다리는 사이 돌아보기를 비웠다: 늦은 답은 버린다
     if (data.conversation_id && data.conversation_id !== reviewConversation) {   // 서버가 물음과 답을 대화에 남겼다
       reviewConversation = data.conversation_id;
       store.only('reviewConversation', reviewConversation);
@@ -2657,6 +2678,7 @@ async function ask(question) {
     pending = null;
     if (waitingAt) reviewAt = reviewPages.length;
   } catch (e) {
+    if (pending !== mine) return;
     pending.failed = e.message;
   }
   if (currentView === 'review') renderReview();
@@ -2719,7 +2741,10 @@ function resizeMessageBox() {
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
   sendButton.disabled = busy || !messageBox.value.trim();
 }
-messageBox.addEventListener('input', resizeMessageBox);
+messageBox.addEventListener('input', () => {
+  resizeMessageBox();
+  if (draft && currentView === 'thread') { draft.unsent = messageBox.value; store.only('draft', draft); }   // 적던 글을 이 기기에 적어 둔다
+});
 wrapUpLink.addEventListener('click', () => { if (!busy) { askedToWrapUp = true; showRecord(); } });
 
 /* 컴퓨터에서는 Enter로 보내고 Shift+Enter로 줄을 바꾼다. 휴대폰에서는 Enter가 줄바꿈이다.

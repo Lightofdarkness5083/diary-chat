@@ -24,17 +24,20 @@ from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from bible import KO, Bible, BibleSetupError, PassageError
 from bible.lookup import _eun
 from bible import paragraphs as PARAGRAPHS
 
+from once import Once
 from settings import read_prompt
 
 from . import ai_client
 from .record import RecordError, build_record
 from .signals import OPENING, RESUME_SIGNAL, SIGNALS, START_SIGNAL
+
+ONCE = Once()          # 같은 정리 요청을 다시 보내도 AI를 한 번만 부른다
 
 router = APIRouter(prefix="/api/meditation", tags=["meditation"])
 
@@ -114,6 +117,7 @@ class ResumeRequest(BaseModel):
 
 class RecordRequest(BaseModel):
     session_id: str
+    request_id: str = Field(default="", max_length=64)   # 같은 요청을 다시 보내도 정리를 한 번만 만든다
 
 
 @router.get("/health")
@@ -338,7 +342,10 @@ def record(request: RecordRequest):
         return error("이 묵상을 찾을 수 없습니다. 본문을 다시 불러와 주세요.", 404)
     if not any(m["role"] == "user" and m["content"] not in SIGNALS for m in session["messages"]):
         return error("아직 정리할 묵상이 없습니다.", 409)
-    try:
-        return build_record(session)
-    except RecordError as e:
-        return error(str(e), 502)
+    def work():
+        try:
+            return build_record(session)
+        except RecordError as e:
+            return error(str(e), 502)
+    key = f"record:{request.session_id}:{request.request_id}" if request.request_id else ""
+    return ONCE.run(key, work)
