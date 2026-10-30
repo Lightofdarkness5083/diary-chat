@@ -19,6 +19,7 @@ from pydantic import BaseModel
 import conversations.service as conversation_service
 from diary import access
 from meditation import ai_client
+from once import Once
 from settings import read_prompt
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -52,6 +53,7 @@ class ChatRequest(BaseModel):
     records: list[dict[str, Any]] = []  # 일기장이 꺼져 있을 때만 쓴다 (시험용)
     today: str = ""                     # 묵상자의 오늘 날짜 YYYY-MM-DD
     conversation_id: str = ""           # 이어 갈 대화의 번호. 없으면 새 대화를 시작한다
+    request_id: str = ""                # 같은 물음을 다시 보내도(연결이 끊겨) 한 번만 답하고 한 번만 남긴다
 
 
 def nfc(text):
@@ -168,8 +170,20 @@ def _records_for(authorization, sent):
     return load_records(store.list(uid)), uid, None
 
 
+ONCE = Once()          # 같은 물음을 다시 보내도 AI를 한 번만 부르고 대화에 한 번만 남긴다
+
+
 @router.post("")
 def chat(request: ChatRequest, authorization: Optional[str] = Header(default=None)):
+    try:
+        who = access.who(authorization)[0] if access.store() is not None else "anon"
+    except access.NotSignedIn:
+        who = "anon"
+    key = f"chat:{who}:{request.request_id[:64]}" if request.request_id else ""
+    return ONCE.run(key, lambda: _answer(request, authorization))
+
+
+def _answer(request, authorization):
     messages = []
     for item in request.messages[-MAX_TURNS:]:
         role, content = item.get("role"), str(item.get("content") or "").strip()
