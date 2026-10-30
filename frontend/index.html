@@ -1582,7 +1582,18 @@ function rememberedNext() {
   return kept && kept.key === nextKey() ? kept.next : null;
 }
 async function findNext() {
-  const next = await lookNext();
+  let next = await lookNext();
+  if (next.finished && progress) {
+    // 책을 다 마친 뒤 이미 다른 책을 묵상했으면, 그 가장 최근 묵상에서 이어 간다 (책갈피가 옛 책에 남아 있던 경우)
+    const when = r => r.date + (r.meditation_time || '');
+    const moved = records.filter(r => r.book && r.book !== progress.book && r.chapter_end).sort((a, b) => when(a).localeCompare(when(b))).pop();
+    const lastOfBook = records.filter(r => r.book === progress.book).map(when).sort().pop() || '';
+    if (moved && when(moved) > lastOfBook) {
+      progress = { book: moved.book, chapter: moved.chapter_end, verse: moved.verse_end };
+      store.write('progress', progress);
+      next = await lookNext();
+    }
+  }
   if (next.finished && progress && !progress.done) {      // 책을 끝까지 마쳤다: 책갈피에 "다 읽음"을 붙인다. 다음에 저장하는 본문이 새 책갈피가 된다
     progress = { ...progress, done: true };
     store.write('progress', progress);
@@ -1628,6 +1639,7 @@ async function lookAheadToday() {
     const next = await findNext();
     const still = nextKey() === key && !draft && !planned && !recordsOn(todayKey).length && currentView === 'home';
     if (still && next.ref) showTodayWord(next.ref);
+    else if (still && next.finished) homeStatus.textContent = `${next.book} 묵상을 끝까지 마쳤습니다. 오늘을 누르면 다음 책을 고릅니다.`;
   } catch (e) {}        // 서버가 자고 있거나 답이 없으면 "어디 다음부터" 안내를 그대로 둔다
   lookingNext = '';
 }
