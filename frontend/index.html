@@ -725,6 +725,8 @@ function getJSON(path) { return request(path, {}); }
    _owner가 없는 기록은 이 기기에만 있는 것이다. */
 let appConfig = { login: null, firebase: null };
 let account = null;           // 로그인한 사람: { uid, email, token() }
+let remoteSynced = false;     // 이번에 열고 나서 일기장의 자리(책갈피, 멈춘 묵상)를 서버에서 읽었는가. 읽기 전에는 서버에 적지 않는다
+let lastSync = 0;
 let firebaseAuth = null;
 
 const RECORD_FIELDS = ['date', 'meditation_time', 'chapter_start', 'verse_start', 'chapter_end', 'verse_end', 'book', 'passage', 'title',
@@ -798,6 +800,7 @@ async function signIn() {
 /* 로그아웃: 책을 덮은 뒷면에서 묻는다. 일기장(Firestore)은 그대로 두고, 이 기기에서 일기장의 것과 돌아보기의 쪽을 치운다 */
 async function signOut() {
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; await pushState(); }   // 하다가 멈춘 묵상을 일기장에 먼저 적어 둔다
+  remoteSynced = false;
   try { if (firebaseAuth) await firebaseAuth.signOut(); } catch (e) {}
   // 함께 쓰는 기기에 남의 묵상이 남지 않게: 일기장에서 가져온 것은 이 기기에서 치운다. 이 기기에만 있는 것은 남긴다
   records = records.filter(r => !r._owner);
@@ -871,11 +874,22 @@ async function loadDiary() {
   } else if (store.read('stateAt', 0) || progress || draft || planned) {
     pushState();
   }
+  remoteSynced = true;
+  lastSync = Date.now();
+}
+
+/* 일기장(기록과 자리)을 서버에서 다시 읽어 맞춘다. 실패하면 던진다 */
+async function syncDiary() {
+  diaryLoading = loadDiary();
+  try { await diaryLoading; } finally { diaryLoading = null; }
 }
 
 /* 묵상 중인 자리와 하다가 멈춘 묵상을 일기장에 적어 둔다. 다른 기기에서 이어 갈 수 있게 */
 let stateTimer = null;
 function stateChanged() {
+  // 일기장의 자리를 아직 읽지 못했으면 이 기기의 변화를 '더 새것'으로 치지도, 서버에 적지도 않는다.
+  // 그래야 오래된 기기나 새 기기가 다른 기기의 새 자리를 덮어쓰지 않는다
+  if (account && !remoteSynced) return;
   try { localStorage.setItem('dwj.stateAt', JSON.stringify(Date.now())); } catch (e) {}
   if (!account) return;
   clearTimeout(stateTimer);
@@ -911,7 +925,7 @@ async function enterDiary() {
   if (account) {
     diaryLoading = loadDiary();
     try { await diaryLoading; }
-    catch (e) { problem = `일기장을 읽지 못했습니다. ${e.message} 이 기기에 있는 것만 보입니다.`; }
+    catch (e) { problem = `일기장을 펼치지 못했습니다. 잠시 뒤 오늘을 누르면 다시 펼칩니다. (${e.message})`; }
     diaryLoading = null;
   }
   renderHome(problem);
@@ -1646,7 +1660,7 @@ async function lookAheadToday() {
 
 /* "이어서 묵상": 하던 책의 다음 절부터 한 단락을 골라 바로 묵상을 시작한다 */
 const FIRST_PASSAGE = '시편 23:1-6';     // 처음 묵상하는 사람의 첫 말씀. 누구에게나 좋은 말씀으로 시작한다
-function firstTimer() { return !records.length && !progress && !draft && !planned; }
+function firstTimer() { return !records.length && !progress && !draft && !planned && (!account || remoteSynced); }   // 일기장을 못 읽었으면 처음 온 사람으로 치지 않는다
 async function continueNext() {
   if (!progress && !records.length) { await beginMeditation(FIRST_PASSAGE, 'continue'); return; }
   if (!progress) { openEntry('묵상할 본문을 적거나 아래에서 고르세요.'); return; }
@@ -1667,9 +1681,15 @@ async function startToday() {
   if (starting) return;
   starting = true;
   try {
-    if (diaryLoading) {        // 일기장을 다 읽은 뒤에 시작한다: 다른 기기에서 한 묵상과 멈춘 자리를 먼저 맞춘다
+    if (account) {             // 시작하기 전에 서버와 한 번 더 맞춘다: 다른 기기에서 한 묵상과 멈춘 자리를 먼저 따른다
       homeStatus.textContent = '일기장을 펼치는 중입니다…';
-      try { await diaryLoading; } catch (e) {}
+      try { if (diaryLoading) await diaryLoading; else await syncDiary(); }
+      catch (e) {
+        renderHome(`일기장을 펼치지 못했습니다. 잠시 뒤 다시 눌러 주세요. (${e.message})`);
+        starting = false;
+        return;
+      }
+      if (recordsOn(todayKey).length) { renderHome(); show('home'); starting = false; return; }   // 다른 기기에서 오늘 묵상을 이미 마쳤다
     }
     if (draft) await resumeMeditation();
     else if (planned) await beginMeditation(planned.ref, planned.mode);
@@ -1906,7 +1926,7 @@ function renderHome(notice, finishedBook) {
     if (done.length) cell.append(leaf(false));       // 달력에는 표식만 둔다. 본문은 눌러서 본다
     else if (pausedHere) cell.append(leaf(true));
     cell.setAttribute('aria-label', dateText(key) + (done.length ? `, ${done[done.length - 1].passage} 묵상함` : pausedHere ? ', 묵상 중' : key === todayKey ? ', 오늘' : ''));
-    if (key === todayKey && (draft || planned || !done.length)) cell.onclick = startToday;
+    if (key === todayKey && !done.length) cell.onclick = startToday;          // 오늘 묵상을 마쳤으면 다시 열지 않는다 (하루 한 번)
     else if (done.length) cell.onclick = () => showPast(key);
     else cell.disabled = true;
     calendar.append(cell);
@@ -1914,7 +1934,7 @@ function renderHome(notice, finishedBook) {
 
   /* 달력 아래: 오늘을 누르면 무엇이 열리는지 한 줄로 알려 준다 */
   const today = recordsOn(todayKey);
-  const leaving = today.length && !draft && !planned;     // 오늘 묵상을 마치고 돌아왔다: 나가는 길을 안내한다
+  const leaving = today.length > 0;     // 오늘 묵상을 마쳤다: 나가는 길을 안내한다 (남은 멈춘 묵상이 있어도 오늘은 마친 것)
   homeStatus.className = 'home-status' + (notice && !leaving ? ' notice-line' : '');
   homeNote.textContent = leaving && notice ? notice : '';
   if (leaving) homeStatus.textContent = '오늘 묵상을 마쳤습니다.';
@@ -2789,6 +2809,13 @@ backBook.onclick = () => {                           // 뒷면을 누르면 앞�
   setTimeout(() => front.click(), still ? 0 : 1000);
 };
 mainBox.classList.remove('turning');
+
+/* 다른 앱에 다녀오거나 휴대폰을 다시 켰을 때: 달력을 보고 있으면 서버와 다시 맞춘다 (다른 기기에서 묵상했을 수 있다) */
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !account || diaryLoading || currentView !== 'home') return;
+  if (Date.now() - lastSync < 30000) return;
+  try { await syncDiary(); if (currentView === 'home') renderHome(); } catch (e) {}
+});
 
 /* 글 쓰는 자리의 높이만큼 아래 여백을 둔다 */
 new ResizeObserver(() => {
