@@ -715,7 +715,7 @@ function dateText(key) {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 }
-const todayKey = dateKey(new Date());
+let todayKey = dateKey(new Date());     // 자정이 지나면 refreshToday()가 새로 정한다
 
 function getJSON(path) { return request(path, {}); }
 
@@ -987,8 +987,11 @@ let passage = null;   // { reference, verses, missing }
 let busy = false;
 let askedToWrapUp = false;
 
-document.getElementById('today').textContent = new Date().toLocaleDateString('ko-KR',
-  { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+function showTodayTitle() {
+  document.getElementById('today').textContent = new Date().toLocaleDateString('ko-KR',
+    { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+}
+showTodayTitle();
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -1696,6 +1699,7 @@ async function continueNext() {
 let starting = false;
 async function startToday() {
   if (starting) return;
+  if (refreshToday()) return;     // 날이 바뀌었다: 새 날의 달력을 먼저 보인다. 새 '오늘'을 누르면 시작한다
   starting = true;
   try {
     if (account) {             // 시작하기 전에 서버와 한 번 더 맞춘다: 다른 기기에서 한 묵상과 멈춘 자리를 먼저 따른다
@@ -2705,7 +2709,9 @@ function showPast(key) {
 /* 저장: 기록에 날짜와 시각을 붙여 보관하고, 묵상 중인 책에서 어디까지 왔는지 적어 둔다 */
 async function keepRecord(record) {
   const now = new Date();
-  const mine = { id: newId(), date: dateKey(now), meditation_time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, ...record };
+  // 묵상한 날 = 시작한 날. 밤 11시 50분에 시작해 자정을 넘겨 마쳐도 시작한 날의 기록이다 (시각은 실제로 마친 때)
+  const day = (draft && draft.date) || dateKey(now);
+  const mine = { id: newId(), date: day, meditation_time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, ...record };
   records.push(mine);
   const kept = store.only('records', records);         // 먼저 이 기기에 적어 둔다. 올리다 실패해도 잃지 않는다
   let uploaded = false, problem = '';
@@ -2836,7 +2842,22 @@ backBook.onclick = () => {                           // 뒷면을 누르면 앞�
 mainBox.classList.remove('turning');
 
 /* 다른 앱에 다녀오거나 휴대폰을 다시 켰을 때: 달력을 보고 있으면 서버와 다시 맞춘다 (다른 기기에서 묵상했을 수 있다) */
+/* 자정이 지났는지 살핀다. 앱을 열어 둔 채 날이 바뀌어도 달력의 '오늘'이 새 날로 옮겨 가게.
+   자정을 넘겨 마친 묵상은 시작한 날의 기록이다(keepRecord). 그래서 새 날에는 새 묵상을 할 수 있다 */
+function refreshToday() {
+  const now = new Date(), key = dateKey(now);
+  if (key === todayKey) return false;
+  const showingThisMonth = shown.getFullYear() === Number(todayKey.slice(0, 4)) && shown.getMonth() + 1 === Number(todayKey.slice(5, 7));
+  todayKey = key;
+  showTodayTitle();
+  if (showingThisMonth) { shown = new Date(now); shown.setDate(1); }   // 이번 달을 보고 있었으면 새 달로 따라간다
+  if (currentView === 'home' && !starting) renderHome();
+  return true;
+}
+setInterval(refreshToday, 60000);
+
 document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') refreshToday();
   if (document.visibilityState !== 'visible' || !account || diaryLoading || currentView !== 'home') return;
   if (Date.now() - lastSync < 30000) return;
   try { await syncDiary(); if (currentView === 'home') renderHome(); } catch (e) {}
