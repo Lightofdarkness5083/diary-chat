@@ -14,7 +14,7 @@
 | 서버 (API, Render) | https://diary-chat-nqch.onrender.com |
 | API 문서 (Swagger) | https://diary-chat-nqch.onrender.com/docs |
 
-API 문서는 누구나 볼 수 있다. 실제로 부르려면 접속 암호(`x-passcode`)와 Google 로그인 토큰이 있어야 한다.
+API 문서는 누구나 볼 수 있다. 실제로 부르려면 참여자 명단에 있는 Google 계정의 로그인 토큰이 있어야 한다.
 서버는 Render 무료 요금제라, 한동안 쓰지 않았으면 첫 요청에 깨어나는 데 1분쯤 걸린다.
 
 | 저장된 묵상 | 비서에게 묻기 | 물어본 것 (대화 기록) |
@@ -24,7 +24,7 @@ API 문서는 누구나 볼 수 있다. 실제로 부르려면 접속 암호(`x-
 
 ## 화면의 흐름
 
-1. **책 표지를 펼친다.** Google 계정으로 로그인한다.
+1. **책 표지를 펼친다.** 처음 온 사람은 안내를 읽고, 안내 끝의 [Google 계정으로 시작하기]로 참여한다 (선착순). 다시 온 사람은 바로 달력이 나온다.
 2. **달력**이 나온다. 묵상한 날에는 그날의 본문이 적혀 있고, 누르면 그날의 일기가 열린다.
 3. **오늘을 누른다.** 읽던 책에서 이어지는 본문이 한 단락만큼 골라져 나온다. 끝 절을 바꾸거나 다른 본문을 직접 적을 수도 있다.
 4. **7단계 묵상**을 한다.
@@ -46,7 +46,7 @@ API 문서는 누구나 볼 수 있다. 실제로 부르려면 접속 암호(`x-
 ```mermaid
 flowchart LR
     phone["휴대폰<br/>frontend/index.html"] -->|로그인| fbauth["Firebase<br/>로그인"]
-    phone -->|접속 암호 + 로그인 토큰| server["서버 (FastAPI)<br/>dev_main.py"]
+    phone -->|로그인 토큰| server["서버 (FastAPI)<br/>dev_main.py"]
     server --> med["meditation/<br/>7단계 인도"]
     server --> chat["chat/<br/>돌아보기 비서"]
     server --> diary["diary/<br/>일기장"]
@@ -60,7 +60,9 @@ flowchart LR
 | 자리 | 하는 일 |
 | --- | --- |
 | `frontend/` | 휴대폰 화면 한 장(`index.html`)과 홈 화면 아이콘 |
-| `dev_main.py` | 앱의 출입구. 세 부분을 연결하고, 접속 암호를 확인한다 |
+| `dev_main.py` | 앱의 출입구. 세 부분을 연결하고, 문지기를 세운다 |
+| `gate.py` | 문지기: 처음 로그인한 사람의 선착순 참여, 명단에 있는 계정만, 하루 천장 안에서 |
+| `signup_sheet.py` | 새 참여자를 관리자의 Google 시트에 한 줄 적는다 |
 | `meditation/` | 7단계 묵상 인도, 끝났는지 확인, 일기로 정리 |
 | `chat/` | 돌아보기 비서. 저장된 묵상을 도구로 찾아 읽고 답한다 |
 | `diary/` | 일기장. 로그인한 사람의 묵상만 Firestore에 읽고 쓴다 |
@@ -73,11 +75,12 @@ flowchart LR
 
 ## API
 
-서버 주소의 `/docs`(Swagger UI)에서 모두 보고 시험할 수 있다. `/api/`는 접속 암호와 로그인 정보를 확인한다.
+서버 주소의 `/docs`(Swagger UI)에서 모두 보고 시험할 수 있다. `/api/`는 로그인과 참여자 명단을 확인한다 (본문 읽기는 열려 있다).
 
 | 길 | 하는 일 |
 | --- | --- |
 | `GET /api/diary/records` | 내 묵상 목록 |
+| `POST /api/join` | 처음 Google로 로그인한 사람을 참여자 명단에 넣는다 (선착순). 이미 있으면 그대로 |
 | `POST /api/diary/records` | 묵상 하나 저장 (새로 만들기만 한다) |
 | `DELETE /api/diary/records/{id}` | 묵상 하나 지우기 ("지움" 표시) |
 | `POST /api/chat` | 돌아보기 비서에게 묻기. 묵상의 윤곽을 시스템 프롬프트에 넣고, 필요하면 도구(`books_in_period`, `book_records`)를 불러 기록을 읽는다. 물음과 답은 대화 기록에 자동으로 남는다 |
@@ -97,7 +100,7 @@ flowchart LR
 | --- | --- | --- |
 | Claude API 키, Firebase 서비스 계정 키 | 서버 환경변수 | 저장소에 올리지 않는다 (`.env`는 `.gitignore`) |
 | **AI 지시문(인도법)** | 비공개 저장소 + 서버의 Secret Files | 저장소에는 자리만 있다. 서버는 `/etc/secrets/`에서 읽는다 |
-| API 요금 | 접속 암호 `APP_PASSCODE` | 암호 없이는 `/api/`를 부를 수 없다 |
+| API 요금 | 문지기 `gate.py` + Firestore `members` | 처음 Google로 로그인한 사람이 선착순(`MAX_MEMBERS`, 기본 20명)으로 참여자 명단(문서 이름 = 이메일)에 들어오고, 명단에 있는 계정만 묵상과 비서를 쓴다. 한 사람이 하루에 AI를 부르는 횟수에 천장(`AI_DAILY_LIMIT`, 기본 100)을 두어, 화면 오류로 요청이 되풀이되는 사고를 막는다. Anthropic 콘솔의 월 사용 한도가 마지막 울타리다 |
 | 각자의 일기 | Firestore | 화면은 Firestore에 직접 가지 않는다. 서버가 로그인 토큰으로 누구인지 확인하고 그 사람의 묵상만 읽고 쓴다 |
 
 **AI 지시문을 공개하지 않는 이유.** 인도자가 어떻게 묻고, 언제 기다리고, 언제 넘어가는지가 이 앱의 중심이고, 오랫동안 다듬어 온 것이다. 그래서 코드는 공개하되 지시문은 따로 지킨다. 서버는 `settings.read_prompt()` 한 곳에서 지시문을 찾고, 없으면 무엇이 빠졌는지 분명히 알린다 (`prompts/README.md`).
@@ -122,7 +125,7 @@ flowchart LR
 | --- | --- |
 | Build Command | `pip install -r requirements.txt` |
 | Start Command | `uvicorn dev_main:app --host 0.0.0.0 --port $PORT` |
-| Environment | `ANTHROPIC_API_KEY`, `APP_PASSCODE`, `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `ALLOWED_ORIGINS` |
+| Environment | `ANTHROPIC_API_KEY`, `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_WEB_CONFIG`, `ALLOWED_ORIGINS` (+ 선택: `AI_DAILY_LIMIT`, `MAX_MEMBERS`, `SIGNUP_SHEET_ID`, `APP_PASSCODE`) |
 | Secret Files | AI 지시문 다섯 파일 (`prompts/README.md`의 이름 그대로) |
 
 `main`에 합치면 Render가 자동으로 다시 배포한다.
@@ -132,7 +135,10 @@ flowchart LR
 | 어디 | 환경변수 | 값 | 비밀인가 |
 | --- | --- | --- | --- |
 | Render (서버) | `ANTHROPIC_API_KEY` | Claude API 키 | 🔒 비밀 |
-| Render (서버) | `APP_PASSCODE` | 접속 암호 | 🔒 비밀 |
+| Render (서버) | `AI_DAILY_LIMIT` | 한 사람 하루 AI 호출 천장 (선택, 기본 100) | 공개돼도 됨 |
+| Render (서버) | `MAX_MEMBERS` | 선착순 참여자 수 (선택, 기본 20. 관리자도 한 자리) | 공개돼도 됨 |
+| Render (서버) | `SIGNUP_SHEET_ID` | 새 참여자를 적을 Google 시트 (선택. 시트 공유에 서비스 계정을 편집자로) | 공개돼도 됨 |
+| Render (서버) | `APP_PASSCODE` | 접속 암호 (선택. 참여자 명단을 쓰면 두지 않는다) | 🔒 비밀 |
 | Render (서버) | `FIREBASE_SERVICE_ACCOUNT` | 서비스 계정 키 JSON | 🔒 비밀 |
 | Render (서버) | `FIREBASE_WEB_CONFIG` | Firebase 웹 앱 설정 JSON | 공개돼도 됨 |
 | Render (서버) | `ALLOWED_ORIGINS` | 화면 주소 (CORS 명단, 쉼표로 여럿) | 공개돼도 됨 |
@@ -148,6 +154,8 @@ iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막
 
 - `diaries/{기록 번호}`: 묵상 한 편. 모든 문서가 같은 19개 항목을 가진다: 기록 17개(`diary/schema.py`) + `uid` + `deleted`.
 - `diary_state/{uid}`: 읽던 책의 자리, 하다가 멈춘 묵상.
+- `members/{이메일}`: 참여자 명단. 처음 로그인할 때 `POST /api/join`이 선착순으로 적는다 (이름, uid, 참여한 때). 관리자가 `disabled: true`를 적으면 막힌다.
+- `usage/{uid}_{날짜}`: 하루 AI 호출 수 (한국 시각 기준).
 - 묵상은 새로 만들기만 하고, 다른 내용으로 덮어쓰지 않는다. 지우기는 "지움" 표시만 한다.
 - 예전 구조(11개 항목)의 묵상은 `tools/diaries.py`로 맞춘다. `--apply` 없이는 아무것도 바꾸지 않고, 바꿀 때는 먼저 사본을 받아 대조한다.
 
@@ -161,6 +169,7 @@ iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막
 .venv/bin/python -m tests.test_passcode
 .venv/bin/python -m tests.test_cors
 .venv/bin/python -m tests.test_conversations
+.venv/bin/python -m tests.test_gate
 ```
 
 AI를 실제로 부르지 않고, 흉내 낸 답으로 대화 흐름과 기록의 모양을 확인한다.

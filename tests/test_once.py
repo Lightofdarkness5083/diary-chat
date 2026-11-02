@@ -57,10 +57,10 @@ built = []
 meditation.routes.build_record = lambda session: (built.append(1), {"title": "정리"})[1]
 sid = "s" * 32
 meditation.routes.SESSIONS[sid] = {"messages": [{"role": "user", "content": "기도"}], "passage": {}, "system": "", "completed": True}
-r1 = client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r1"}).json()
-r2 = client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r1"}).json()
+r1 = client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r1"}, headers=ME).json()
+r2 = client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r1"}, headers=ME).json()
 assert r1 == r2 == {"title": "정리"} and len(built) == 1
-client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r2"})          # 묵상으로 돌아갔다가 다시 정리하면 새 번호, 새 정리
+client.post("/api/meditation/record", json={"session_id": sid, "request_id": "r2"}, headers=ME)          # 묵상으로 돌아갔다가 다시 정리하면 새 번호, 새 정리
 assert len(built) == 2
 
 print("모든 검사 통과")
