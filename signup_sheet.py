@@ -1,4 +1,4 @@
-"""새 참여자를 관리자의 Google 시트에 한 줄 적는다 (날짜, 이름, 이메일).
+"""새 참여자를 관리자의 Google 시트에 한 줄 적는다 (순번, 날짜, 이름, 이메일).
 
 서버의 서비스 계정(FIREBASE_SERVICE_ACCOUNT)이 시트에 쓴다. 준비할 것:
   1. Google Cloud(프로젝트 diary-with-jesus)에서 Google Sheets API 켜기

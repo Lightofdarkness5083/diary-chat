@@ -14,6 +14,12 @@
 
 MemoryStore는 검사와 내 컴퓨터용이고, FirestoreStore가 실제 일기장이다. 둘은 같은 일을 한다.
 """
+try:
+    from google.api_core.exceptions import AlreadyExists      # Firestore create()가 이미 있는 문서에서 내는 오류
+except ImportError:                                           # 열쇠 없이 시험하는 컴퓨터
+    class AlreadyExists(Exception):
+        pass
+
 from .legacy import as_current
 from .schema import FIELDS
 
@@ -196,11 +202,11 @@ class FirestoreStore:
 
     def count_use(self, uid, day):
         """오늘 이 사람이 AI를 부른 횟수에 하나를 더하고, 더한 뒤의 수를 돌려준다. 사고를 막는 천장에 쓴다."""
+        from firebase_admin import firestore
         ref = self.db.collection(USAGE).document(f"{uid}_{day}")
-        snapshot = ref.get()
-        count = ((snapshot.to_dict() or {}).get("count", 0) if snapshot.exists else 0) + 1
-        ref.set({"uid": uid, "day": day, "count": count})
-        return count
+        # 더하기는 Firestore가 한 번에 한다. 요청 둘이 거의 동시에 와도 하나가 빠지지 않는다
+        ref.set({"uid": uid, "day": day, "count": firestore.Increment(1)}, merge=True)
+        return (ref.get().to_dict() or {}).get("count", 1)
 
     def _doc(self, record_id):
         return self.db.collection(RECORDS).document(record_id)
@@ -214,15 +220,21 @@ class FirestoreStore:
 
     def add(self, uid, record_id, record):
         ref = self._doc(record_id)
-        if ref.get().exists:
+        created = False
+        if not ref.get().exists:
+            # create는 문서가 이미 있으면 실패한다. 그사이 다른 요청이 먼저 만들었어도 덮어쓰지 않는다.
+            # 같은 기록이 거의 동시에 두 번 오면(연결이 끊겨 다시 보냄) 늦은 쪽은 여기서 실패한다. 그때는 아래에서 같은 것인지 본다
+            try:
+                ref.create({**record, "uid": uid, "deleted": False})
+                created = True
+            except AlreadyExists:
+                pass
+        if not created:
             stored = self._mine(uid, record_id)
             if stored is None or not _same(stored, record):
                 raise Conflict(record_id)
             if stored.get("deleted"):
                 ref.update({"deleted": False})
-        else:
-            # create는 문서가 이미 있으면 실패한다. 그사이 다른 요청이 먼저 만들었어도 덮어쓰지 않는다
-            ref.create({**record, "uid": uid, "deleted": False})
         return self.get(uid, record_id)        # 저장한 것을 다시 읽어 돌려준다
 
     def get(self, uid, record_id):

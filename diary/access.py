@@ -56,7 +56,9 @@ def _connect():
                 claims = auth.verify_id_token(token, app=app)
             except Exception:
                 raise NotSignedIn()
-            return claims["uid"], claims.get("email", ""), claims.get("name", "")
+            # 확인된 이메일만 쓴다. Google 계정은 늘 확인되어 있다. 확인 안 된 주소로 남의 이메일 자리에 들어오지 못하게
+            email = claims.get("email", "") if claims.get("email_verified") else ""
+            return claims["uid"], email, claims.get("name", "")
 
         _state.update(store=FirestoreStore(firestore.client(app)), verify=verify, mode="firebase")
     elif os.environ.get("DIARY_DEV_LOGIN") == "1":

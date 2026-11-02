@@ -12,6 +12,7 @@
 """
 import datetime
 import os
+import threading
 import time
 
 import signup_sheet
@@ -25,6 +26,7 @@ GUARDED = ("/api/meditation/start", "/api/meditation/resume", "/api/meditation/c
 AI_CALLS = ("/api/meditation/chat", "/api/meditation/record", "/api/meditation/suggest", "/api/chat")
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
+_joining = threading.Lock()   # 자리 세기와 넣기를 한 번에 한 사람씩. 20번째 자리에 두 사람이 동시에 들어오지 않게
 _seen = {}               # 이메일 -> (초대받았나, 언제까지 믿을지)
 ALLOWED_FOR, REFUSED_FOR = 60, 10      # 초. 명단에서 뺀 사람은 1분 안에, 새로 넣은 사람은 10초 안에 반영된다
 
@@ -94,16 +96,18 @@ def join(authorization):
     email = (me["email"] or "").strip().lower()
     if not email:
         return 403, {"error": "이메일이 있는 Google 계정으로 시작해 주세요.", "code": "sign_in"}
-    found = store.find_member(email)
-    if found is not None:
-        if found.get("disabled"):
-            return 403, {"error": "이 계정은 지금 쓸 수 없습니다. 관리자에게 문의해 주세요.", "code": "not_invited", "email": email}
+    with _joining:      # 서버는 하나(Render 무료, 일꾼 1)라 이 자물쇠로 충분하다
+        found = store.find_member(email)
+        if found is not None:
+            if found.get("disabled"):
+                return 403, {"error": "이 계정은 지금 쓸 수 없습니다. 관리자에게 문의해 주세요.", "code": "not_invited", "email": email}
+            _seen.pop(email, None)
+            return 200, {"joined": True, "new": False}
+        seats = store.count_members()
+        if seats >= max_members():
+            return 403, {"error": "지금은 시범 기간이라 자리가 모두 찼습니다. 정식으로 열면 알려 드리겠습니다.", "code": "full"}
+        now = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+        store.add_member(email, {"name": me["name"], "uid": me["uid"], "joined_at": now, "seat": seats + 1})
         _seen.pop(email, None)
-        return 200, {"joined": True, "new": False}
-    if store.count_members() >= max_members():
-        return 403, {"error": "지금은 시범 기간이라 자리가 모두 찼습니다. 정식으로 열면 알려 드리겠습니다.", "code": "full"}
-    now = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-    store.add_member(email, {"name": me["name"], "uid": me["uid"], "joined_at": now})
-    _seen.pop(email, None)
-    signup_sheet.add([now, me["name"], email])
+    signup_sheet.add([seats + 1, now, me["name"], email])
     return 200, {"joined": True, "new": True}
