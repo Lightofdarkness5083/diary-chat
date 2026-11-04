@@ -1174,15 +1174,21 @@ function renderBlock(box, block) {
 function renderGuide(text) {
   const box = el('div', 'guide');
   const parts = text.split(/\[\[\s*([^\[\]]{1,30}?)\s*\]\]/);
-  const shown = new Set();                 // 이 말에서 표시로 카드가 붙는 절. 글이 표시보다 앞에서 말해도 두 번 붙이지 않게 먼저 모은다
+  // 이 말에서 표시로 카드가 붙는 절. 글이 표시보다 앞에서 말해도 두 번 붙이지 않게 먼저 모은다.
+  // 카드를 만드는 것과 같은 풀이(markedVerses)로 모아야 [[30]], [[2 : 30]] 같은 표시도 빠지지 않는다
+  const shown = new Set();
   parts.forEach((part, i) => {
-    if (i % 2 === 1) for (const v of part.includes('본문') ? (passage ? passage.verses : []) : versesIn(part)) shown.add(v);
+    if (i % 2 === 1 && passage) for (const v of markedVerses(part) || []) shown.add(v);
   });
+  const carded = new Set();                // 이 말에서 이미 카드로 보인 절
   let added = 0;
   parts.forEach((part, i) => {
     if (i % 2 === 1) {
+      const verses = passage ? markedVerses(part) : null;
+      // 같은 절의 표시가 한 말에 두 번 오면 카드는 한 번만. [[본문]]은 늘 전체를 보인다
+      if (verses && verses.length && !part.includes('본문') && verses.every(v => carded.has(v))) return;
       const card = markedPassage(part);
-      if (card) box.append(card);
+      if (card) { box.append(card); if (!part.includes('본문')) (verses || []).forEach(v => carded.add(v)); }
       return;
     }
     for (const block of part.split(/\n{2,}/)) {
@@ -1190,7 +1196,7 @@ function renderGuide(text) {
       // 안전망: 인도자가 표시 없이 "11절", "6:11"처럼 글로만 말해도 그 절의 말씀을 바로 아래에 붙인다
       const missing = pointedVerses(block).filter(v => !shown.has(v)).slice(0, Math.max(0, MAX_AUTO_VERSES - added));
       if (missing.length) {
-        missing.forEach(v => shown.add(v));
+        missing.forEach(v => { shown.add(v); carded.add(v); });
         added += missing.length;
         box.append(passageCard(missing, null));
       }
@@ -1229,8 +1235,8 @@ function versesIn(text, maxSpan = Infinity) {
 
 /* [[본문]], [[3:18]], [[3:18-19]], [[3장 18절]], [[18절]], [[골로새서 3:18]] 을 모두 알아본다.
    오늘의 본문에 없는 절이면 조용히 빼지 않고, 없다는 것을 알린다. */
-function markedPassage(mark) {
-  if (mark.includes('본문')) return passageCard(passage.verses, passage.reference);
+function markedVerses(mark) {
+  if (mark.includes('본문')) return passage.verses;
   const full = mark.match(/(\d+)\s*[:장]\s*(\d+)\s*절?(?:\s*[-~–]\s*(?:(\d+)\s*[:장]\s*)?(\d+)\s*절?)?/);
   const alone = mark.match(/(\d+)\s*절?(?:\s*[-~–]\s*(\d+)\s*절?)?/);
   if (!alone) return null;                          // 본문 표시가 아닌 다른 표시
@@ -1242,8 +1248,16 @@ function markedPassage(mark) {
   const notBefore = (u, c, v) => c == null ? u.end >= v : (u.chapter > c || (u.chapter === c && u.end >= v));
   const notAfter = (u, c, v) => c == null ? u.start <= v : (u.chapter < c || (u.chapter === c && u.start <= v));
   const verses = passage.verses.filter(u => notBefore(u, c1, v1) && notAfter(u, c2, v2));
+  verses.missingLabel = full ? `${full[1]}:${full[2]}` : alone[1];
+  return verses;
+}
+
+function markedPassage(mark) {
+  const verses = markedVerses(mark);
+  if (!verses) return null;
+  if (mark.includes('본문')) return passageCard(passage.verses, passage.reference);
   if (verses.length) return passageCard(verses, null);
-  return el('p', 'hint', `(${full ? `${full[1]}:${full[2]}` : alone[1]}절은 오늘의 본문 밖에 있습니다)`);
+  return el('p', 'hint', `(${verses.missingLabel}절은 오늘의 본문 밖에 있습니다)`);
 }
 
 function setBusy(value) {
