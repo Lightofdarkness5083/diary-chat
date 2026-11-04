@@ -239,6 +239,13 @@
   #composer .tools button.link { margin: 0; padding: 0.15rem 0; }
   #passage-panel { max-width: 36rem; margin: 0 auto 0.5rem; max-height: 40vh; overflow-y: auto; }
   #passage-panel .passage { margin: 0; }
+  /* 대화 안의 '절 보기' 단추: 누르면 아래 본문 펼치기가 그 절로 내려가 표시한다 */
+  .verse-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.1rem 0 1rem; }
+  .verse-chip { margin: 0; padding: 0.3rem 0.85rem; border: 1.5px solid var(--moss); border-radius: 999px;
+                background: var(--sage); color: var(--moss); font: inherit; font-size: 0.9375rem; cursor: pointer; }
+  .verse-chip.on { background: var(--moss); color: var(--paper); }
+  .verse.hl > span { background: rgba(255, 210, 0, 0.32); box-shadow: -0.35rem 0 0 rgba(255, 210, 0, 0.32); border-radius: 3px; }
+  .verse.hl > .number { box-shadow: -0.35rem 0 0 rgba(212, 161, 6, 0.9); }
   .waiting .slow { display: block; margin-top: 0.4rem; letter-spacing: 0; font-size: 0.875rem; }
   .pause { margin: 1.5rem 0; text-align: center; color: var(--muted); font-size: 0.8125rem; display: flex; align-items: center; gap: 0.75rem; }
   .pause::before, .pause::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
@@ -1008,13 +1015,34 @@ function show(name) {
 const passageToggle = document.getElementById('passage-toggle');
 const passagePanel = document.getElementById('passage-panel');
 
-function openPassagePanel(open) {
+function openPassagePanel(open, pointed = []) {
   passagePanel.hidden = !open;
   passageToggle.setAttribute('aria-expanded', String(open));
   passageToggle.textContent = open ? '본문 접기' : `본문 · ${passage ? passage.reference : ''}`;
-  if (open) passagePanel.replaceChildren(passageCard(passage.verses, null));
+  document.querySelectorAll('.verse-chip.on').forEach(c => c.classList.remove('on'));
+  if (!open) return;
+  passagePanel.replaceChildren(passageCard(passage.verses, null));
+  // 가리킨 절에 색을 칠하고 그 절이 보이도록 펼친 본문 안에서 내려간다 (화면 전체는 움직이지 않는다)
+  const rows = pointed.map(v => passagePanel.querySelector(`.verse[data-key="${v.chapter}:${v.start}"]`)).filter(Boolean);
+  rows.forEach(r => r.classList.add('hl'));
+  if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 24;
 }
 passageToggle.onclick = () => openPassagePanel(passagePanel.hidden);
+
+/* '📖 2:30 보기' 단추. 같은 단추를 다시 누르면 펼친 본문을 접는다 */
+function verseChip(verses) {
+  const first = verses[0], last = verses[verses.length - 1];
+  const label = first === last ? `${first.chapter}:${first.label}`
+    : first.chapter === last.chapter ? `${first.chapter}:${first.start}-${last.end}` : `${first.chapter}:${first.start}-${last.chapter}:${last.end}`;
+  const chip = el('button', 'verse-chip', `📖 ${label} 보기`);
+  chip.type = 'button';
+  chip.onclick = () => {
+    const again = chip.classList.contains('on') && !passagePanel.hidden;
+    openPassagePanel(!again, verses);
+    if (!again) chip.classList.add('on');
+  };
+  return chip;
+}
 
 let sessionId = null;
 let passage = null;   // { reference, verses, missing }
@@ -1115,6 +1143,7 @@ function api(path, body) {
 /* 본문 카드: 본문 글자는 언제나 서버가 성경 DB에서 꺼낸 것을 그대로 쓴다 */
 function verseRow(v, showChapter) {
   const row = el('div', 'verse');
+  row.dataset.key = `${v.chapter}:${v.start}`;
   row.append(el('span', 'number', showChapter ? `${v.chapter}:${v.label}` : `${v.label}`),
              el('span', 'text', v.text));
   return row;
@@ -1169,30 +1198,46 @@ function renderBlock(box, block) {
   }
 }
 
-/* 인도자의 글: [[본문]], [[장:절]], [[장:절-절]] 표시를 본문 카드로 바꾼다.
-   절 표시는 그 절을 포함하는 단위를 찾아 보여 준다 (묶인 단위는 통째로). */
+/* 인도자의 글: [[본문]]은 본문 전체 카드로, [[장:절]], [[장:절-절]] 표시는 '📖 장:절 보기' 단추로 바꾼다.
+   단추를 누르면 아래 본문 펼치기가 열리면서 그 절로 내려가 색으로 표시한다. 절 표시는 그 절을 포함하는 단위를 찾는다 (묶인 단위는 통째로). */
 function renderGuide(text) {
   const box = el('div', 'guide');
   const parts = text.split(/\[\[\s*([^\[\]]{1,30}?)\s*\]\]/);
-  const shown = new Set();                 // 이 말에서 표시로 카드가 붙는 절. 글이 표시보다 앞에서 말해도 두 번 붙이지 않게 먼저 모은다
+  // 이 말에서 표시로 카드가 붙는 절. 글이 표시보다 앞에서 말해도 두 번 붙이지 않게 먼저 모은다.
+  // 카드를 만드는 것과 같은 풀이(markedVerses)로 모아야 [[30]], [[2 : 30]] 같은 표시도 빠지지 않는다
+  const shown = new Set();
   parts.forEach((part, i) => {
-    if (i % 2 === 1) for (const v of part.includes('본문') ? (passage ? passage.verses : []) : versesIn(part)) shown.add(v);
+    if (i % 2 === 1 && passage) for (const v of markedVerses(part) || []) shown.add(v);
   });
+  const carded = new Set();                // 이 말에서 이미 단추로 보인 절
   let added = 0;
+  // 단추는 바로 앞에 놓인 단추 줄에 이어 놓는다. 사이에 글이 오면 새 줄을 만든다
+  const chipRow = () => {
+    if (box.lastChild && box.lastChild.classList && box.lastChild.classList.contains('verse-chips')) return box.lastChild;
+    return box.appendChild(el('div', 'verse-chips'));
+  };
   parts.forEach((part, i) => {
     if (i % 2 === 1) {
-      const card = markedPassage(part);
-      if (card) box.append(card);
+      const verses = passage ? markedVerses(part) : null;
+      // 같은 절의 표시가 한 말에 두 번 오면 카드는 한 번만. [[본문]]은 늘 전체를 보인다
+      if (verses && verses.length && !part.includes('본문') && verses.every(v => carded.has(v))) return;
+      if (part.includes('본문') || !verses || !verses.length) {     // 본문 전체 카드, 또는 본문 밖이라는 알림
+        const card = markedPassage(part);
+        if (card) box.append(card);
+        return;
+      }
+      chipRow().append(verseChip(verses));          // 한 절이든 두 절이든 카드 대신 단추 하나
+      verses.forEach(v => carded.add(v));
       return;
     }
     for (const block of part.split(/\n{2,}/)) {
       renderBlock(box, block);
-      // 안전망: 인도자가 표시 없이 "11절", "6:11"처럼 글로만 말해도 그 절의 말씀을 바로 아래에 붙인다
+      // 안전망: 인도자가 표시 없이 "11절", "6:11"처럼 글로만 말해도 그 절의 보기 단추를 바로 아래에 붙인다
       const missing = pointedVerses(block).filter(v => !shown.has(v)).slice(0, Math.max(0, MAX_AUTO_VERSES - added));
       if (missing.length) {
-        missing.forEach(v => shown.add(v));
+        missing.forEach(v => { shown.add(v); carded.add(v); });
         added += missing.length;
-        box.append(passageCard(missing, null));
+        for (const v of missing) chipRow().append(verseChip([v]));
       }
     }
   });
@@ -1229,8 +1274,8 @@ function versesIn(text, maxSpan = Infinity) {
 
 /* [[본문]], [[3:18]], [[3:18-19]], [[3장 18절]], [[18절]], [[골로새서 3:18]] 을 모두 알아본다.
    오늘의 본문에 없는 절이면 조용히 빼지 않고, 없다는 것을 알린다. */
-function markedPassage(mark) {
-  if (mark.includes('본문')) return passageCard(passage.verses, passage.reference);
+function markedVerses(mark) {
+  if (mark.includes('본문')) return passage.verses;
   const full = mark.match(/(\d+)\s*[:장]\s*(\d+)\s*절?(?:\s*[-~–]\s*(?:(\d+)\s*[:장]\s*)?(\d+)\s*절?)?/);
   const alone = mark.match(/(\d+)\s*절?(?:\s*[-~–]\s*(\d+)\s*절?)?/);
   if (!alone) return null;                          // 본문 표시가 아닌 다른 표시
@@ -1242,8 +1287,16 @@ function markedPassage(mark) {
   const notBefore = (u, c, v) => c == null ? u.end >= v : (u.chapter > c || (u.chapter === c && u.end >= v));
   const notAfter = (u, c, v) => c == null ? u.start <= v : (u.chapter < c || (u.chapter === c && u.start <= v));
   const verses = passage.verses.filter(u => notBefore(u, c1, v1) && notAfter(u, c2, v2));
+  verses.missingLabel = full ? `${full[1]}:${full[2]}` : alone[1];
+  return verses;
+}
+
+function markedPassage(mark) {
+  const verses = markedVerses(mark);
+  if (!verses) return null;
+  if (mark.includes('본문')) return passageCard(passage.verses, passage.reference);
   if (verses.length) return passageCard(verses, null);
-  return el('p', 'hint', `(${full ? `${full[1]}:${full[2]}` : alone[1]}절은 오늘의 본문 밖에 있습니다)`);
+  return el('p', 'hint', `(${verses.missingLabel}절은 오늘의 본문 밖에 있습니다)`);
 }
 
 function setBusy(value) {
