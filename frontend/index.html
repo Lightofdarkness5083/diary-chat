@@ -1025,7 +1025,34 @@ function openPassagePanel(open, pointed = []) {
   // 가리킨 절에 색을 칠하고 그 절이 보이도록 펼친 본문 안에서 내려간다 (화면 전체는 움직이지 않는다)
   const rows = pointed.map(v => passagePanel.querySelector(`.verse[data-key="${v.chapter}:${v.start}"]`)).filter(Boolean);
   rows.forEach(r => r.classList.add('hl'));
-  if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 24;
+  fitComposer();
+  showPointed();
+}
+function showPointed() {
+  const row = passagePanel.hidden ? null : passagePanel.querySelector('.verse.hl');
+  // 자리가 넉넉하면 앞 절의 끝이 조금 보이게 두고, 좁으면(자판이 올라왔을 때) 가리킨 절을 맨 위에 붙인다
+  const lead = passagePanel.clientHeight < 160 ? 0 : 24;
+  if (row) passagePanel.scrollTop += row.firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - lead;
+}
+
+/* 자판이 올라와 있을 때는 보이는 화면이 절반쯤으로 줄어든다. 그때 펼친 본문과 글 칸이 화면을 다 차지해
+   인도자의 질문이 가려지지 않도록, 질문이 보일 자리(QUESTION_ROOM)를 먼저 떼어 놓고 남는 높이를 둘이 나눠 쓴다.
+   자판이 없을 때는 손대지 않는다 (본문 40vh, 글 칸 40vh 그대로) */
+const QUESTION_ROOM = 170;              // 질문 서너 줄과 그 아래 여백
+let keyboardGap = 0;                    // 자판의 높이. 아래 lift()가 정한다
+function fitComposer() {
+  if (!keyboardGap) {
+    if (passagePanel.style.maxHeight || messageBox.style.maxHeight) { passagePanel.style.maxHeight = messageBox.style.maxHeight = ''; showPointed(); }
+    return;
+  }
+  const visible = window.innerHeight - keyboardGap;
+  const panelHeight = passagePanel.hidden ? 0 : passagePanel.offsetHeight;
+  const fixed = composer.offsetHeight - panelHeight - messageBox.offsetHeight;      // 단추 줄과 여백
+  const budget = Math.max(0, visible - QUESTION_ROOM - fixed);
+  const boxMax = Math.max(64, Math.round(passagePanel.hidden ? budget : budget * 0.4)) + 'px';
+  if (messageBox.style.maxHeight !== boxMax) messageBox.style.maxHeight = boxMax;
+  const panelMax = Math.max(88, Math.round(Math.min(visible * 0.4, budget - messageBox.offsetHeight))) + 'px';
+  if (passagePanel.style.maxHeight !== panelMax) { passagePanel.style.maxHeight = panelMax; showPointed(); }
 }
 passageToggle.onclick = () => openPassagePanel(passagePanel.hidden);
 
@@ -2954,9 +2981,17 @@ document.addEventListener('visibilitychange', async () => {
   try { await syncDiary(); if (currentView === 'home') renderHome(); } catch (e) {}
 });
 
-/* 글 쓰는 자리의 높이만큼 아래 여백을 둔다 */
+/* 글 쓰는 자리의 높이만큼 아래 여백을 둔다.
+   본문을 펼치거나 긴 글을 적어 글 쓰는 자리가 커지면, 커진 만큼 화면도 올린다.
+   그래야 바로 위에 보이던 인도자의 질문이 그 뒤로 가려지지 않는다.
+   (처음 나타날 때는 올리지 않는다. 줄어들 때도 그대로 둔다: 가려지는 것이 없다) */
+let composerWas = 0;
 new ResizeObserver(() => {
-  document.documentElement.style.setProperty('--composer-height', composer.offsetHeight + 'px');
+  fitComposer();
+  const height = composer.offsetHeight;
+  document.documentElement.style.setProperty('--composer-height', height + 'px');
+  if (composerWas && height > composerWas && currentView === 'thread') window.scrollBy(0, height - composerWas);
+  composerWas = height;
 }).observe(composer);
 
 /* 자판이 올라오면 글 쓰는 자리도 자판 바로 위로 올린다.
@@ -2976,9 +3011,10 @@ if (window.visualViewport) {
     const gap = writing() && raw >= KEYBOARD_AT_LEAST ? raw : 0;
     if (gap === lifted) return;            // 바뀐 것이 없으면 아무것도 건드리지 않는다
     const wasAtEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
-    lifted = gap;
+    lifted = keyboardGap = gap;
     composer.style.bottom = askBar.style.bottom = gap ? gap + 'px' : '';
     document.documentElement.style.setProperty('--keyboard', gap + 'px');
+    fitComposer();                         // 자판이 올라와 있는 동안은 펼친 본문과 글 칸을 줄여 질문 자리를 남긴다
     if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 자판이 막 올라왔을 때 한 번만: 마지막 말이 보이게
   };
   vv.addEventListener('resize', lift);
