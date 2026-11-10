@@ -235,10 +235,6 @@
   .day .leaf.paused { color: var(--pen); }
   .day.today .number { width: 1.75rem; border-radius: 50%; background: var(--pen); color: var(--on-pen); font-weight: 700; }
   .day.blank { visibility: hidden; }
-  #composer .tools { max-width: 36rem; margin: 0 auto 0.45rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-  #composer .tools button.link { margin: 0; padding: 0.15rem 0; }
-  #passage-panel { max-width: 36rem; margin: 0 auto 0.5rem; max-height: 40vh; overflow-y: auto; }
-  #passage-panel .passage { margin: 0; }
   /* 대화 안의 '절 보기' 단추: 누르면 아래 본문 펼치기가 그 절로 내려가 표시한다 */
   .verse-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.1rem 0 1rem; }
   .verse-chip { margin: 0; padding: 0.3rem 0.85rem; border: 1.5px solid var(--moss); border-radius: 999px;
@@ -487,20 +483,58 @@
   .failed { margin: 0 0 1.25rem; padding: 0.85rem 1rem; border: 1px solid var(--line); border-radius: 8px; }
   .failed p { margin: 0 0 0.6rem; font-size: 0.9375rem; }
 
-  /* 글 쓰는 자리 */
-  #composer {
-    position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper);
-    border-top: 1px solid var(--line);
-    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  /* ---- 묵상 화면: 위에서부터 지금 질문, 본문, 글 쓰는 칸, (자판) ----
+     판의 높이와 위치는 자판 위로 실제로 보이는 영역(visualViewport)을 따른다 (--vv-height, --vv-top).
+     페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다 */
+  html.meditating, html.meditating body { overflow: hidden; height: 100%; overscroll-behavior: none; }
+  #stage {
+    position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); z-index: 20;
+    height: var(--vv-height, 100vh); height: var(--vv-height, 100dvh);
+    display: flex; flex-direction: column; background: var(--paper);
+    padding: env(safe-area-inset-top, 0px) 0 0;
   }
+  #stage[hidden] { display: none; }
+  #stage > * { width: 100%; max-width: 38.5rem; margin-left: auto; margin-right: auto; padding-left: 1.25rem; padding-right: 1.25rem; }
+
+  /* 1. 지금 질문: 맨 위. 본문 4줄과 글 쓰는 칸에 자리를 내주고 남는 만큼만 차지한다 */
+  #thread { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+            padding-top: 0.9rem; padding-bottom: 0.4rem; font-size: 1rem; line-height: 1.65; }
+  #thread .guide { margin: 0; }
+  #thread .guide > :last-child { margin-bottom: 0; }
+  #thread .verse-chips { margin: 0.1rem 0 0.4rem; }
+  #thread .waiting { margin: 0.4rem 0 0; }
+  #thread .failed, #thread .ask { margin: 0.75rem 0 0.25rem; }
+  #thread .record { margin: 0.75rem 0 1rem; }
+  /* 본문이 접혀 있거나, 배경 설명·묵상 정리처럼 글이 길 때: 본문 자리까지 넓어지고 그 안에서 스크롤 */
+  #stage.folded #thread { flex: 1 1 auto; }
+
+  /* 본문 구역의 머리줄: 접기/펼치기, 정리하기, 달력으로 */
+  #stage .tools { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+                  padding-top: 0.35rem; padding-bottom: 0.35rem; border-top: 1px solid var(--line); }
+  #stage .tools .tools-end { display: flex; gap: 0.9rem; }
+  #stage .tools button.link { margin: 0; padding: 0.1rem 0; font-size: 0.8125rem; }
+
+  /* 2. 펼친 본문: 작은 글씨, 이 구역 안에서만 스크롤. 자판이 올라와도 네 줄 넘게 남는다 */
+  #passage-panel { flex: 1 1 0; min-height: calc(4 * 0.875rem * 1.7 + 1.1rem); overflow-y: auto; overscroll-behavior: contain;
+                   padding-bottom: 0.4rem; }
+  #passage-panel .passage { margin: 0; padding: 0.45rem 0.75rem 0.2rem; font-size: 0.875rem; }
+  #passage-panel .verses { row-gap: 0.2rem; }
+  #passage-panel .verse .number { font-size: 0.75rem; padding-top: 0.15rem; }
+  #passage-panel .verse .text { line-height: 1.7; }
+
+  /* 3. 글 쓰는 칸: 자판 바로 위. 자판이 올라오면 아래 여백(홈 표시줄 자리)을 없앤다 */
+  #composer { flex: none; border-top: 1px solid var(--line);
+              padding-top: 0.5rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+  html.keyboard-up #composer { padding-bottom: 0.4rem; }
   #composer[hidden] { display: none; }
   #composer.resting textarea, #composer.resting button { opacity: 0.4; }
-  #composer .row { max-width: 36rem; margin: 0 auto; display: flex; gap: 0.5rem; align-items: flex-end; }
+  #composer .row { display: flex; gap: 0.5rem; align-items: flex-end; }
   #composer textarea {
-    flex: 1; min-width: 0; resize: none; max-height: 40vh; padding: 0.7rem 0.85rem;
+    flex: 1; min-width: 0; resize: none; max-height: 7.2rem; padding: 0.55rem 0.8rem;
     font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
     background: transparent; border: 1px solid var(--line); border-radius: 8px;
   }
+  #composer button[type=submit] { padding: 0.6rem 1rem; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -661,8 +695,6 @@
   <!-- 한 해 돌아보기: 언제 어느 본문을 묵상했는가 -->
   <section id="year" hidden></section>
 
-  <!-- 묵상 -->
-  <div id="thread" aria-live="polite"></div>
 </main>
 
 <!-- 돌아보기에서 묻는 자리: 화면 아래에 늘 있다 -->
@@ -673,23 +705,31 @@
   </div>
 </form>
 
-<form id="composer" hidden autocomplete="off">
-  <!-- 본문은 글 쓰는 칸 바로 위에서 언제든 펼쳐 볼 수 있다 -->
-  <div id="passage-panel" hidden></div>
+<!-- 묵상: 한 화면에 위에서부터 지금 질문, 본문, 글 쓰는 칸. 화면 높이는 자판 위로 보이는 영역에 맞춘다.
+     지난 질문과 답은 화면에 두지 않는다 (기록은 draft.messages와 서버에 그대로 남는다) -->
+<div id="stage" hidden>
+  <div id="thread" aria-live="polite"></div>
   <div class="tools">
     <button type="button" id="passage-toggle" class="link" aria-expanded="false">본문</button>
-    <button type="button" id="wrap-up" class="link" hidden>묵상을 마치고 정리하기</button>
+    <span class="tools-end">
+      <button type="button" id="wrap-up" class="link" hidden>마치고 정리하기</button>
+      <button type="button" id="stage-home" class="link">달력으로</button>
+    </span>
   </div>
-  <div class="row">
-    <label class="sr-only" for="message">묵상 적기</label>
-    <textarea id="message" rows="1" placeholder="여기에 적어 주세요" autocomplete="off" data-form-type="other" enterkeyhint="enter"></textarea>
-    <button type="submit" id="send" disabled>보내기</button>
-  </div>
-</form>
+  <div id="passage-panel" hidden></div>
+  <form id="composer" hidden autocomplete="off">
+    <div class="row">
+      <label class="sr-only" for="message">묵상 적기</label>
+      <textarea id="message" rows="1" placeholder="여기에 적어 주세요" autocomplete="off" data-form-type="other" enterkeyhint="enter"></textarea>
+      <button type="submit" id="send" disabled>보내기</button>
+    </div>
+  </form>
+</div>
 
 <script src="/config.js"></script>
 <script>
-const thread = document.getElementById('thread');
+const thread = document.getElementById('thread');     // 묵상 화면 맨 위: 인도자의 지금 말 하나만 둔다
+const stage = document.getElementById('stage');
 const composer = document.getElementById('composer');
 const messageBox = document.getElementById('message');
 const sendButton = document.getElementById('send');
@@ -1006,28 +1046,36 @@ function show(name) {
   askBar.hidden = name !== 'review';
   document.getElementById('skip-guide').hidden = name !== 'guide';
   mainBox.classList.remove('turning'); void mainBox.offsetWidth; mainBox.classList.add('turning');   // 한 장이 넘어온다
-  if (name === 'thread') openPassagePanel(false);
+  stage.hidden = name !== 'thread';
+  document.documentElement.classList.toggle('meditating', name === 'thread');   // 묵상 중에는 페이지 전체가 스크롤되지 않는다
+  if (name === 'thread') { roomy = false; openPassagePanel(passageWanted); }
   if (name !== 'thread') { composer.hidden = true; document.documentElement.style.setProperty('--composer-height', (name === 'review' ? askBar.offsetHeight : 0) + 'px'); }
   window.scrollTo(0, 0);
 }
 
-/* ---- 본문 보기: 해석과 진리를 쓸 때에도 본문을 글 쓰는 칸 바로 위에 두고 본다 ---- */
+/* ---- 본문 보기: 지금 질문 바로 아래, 글 쓰는 칸 위에 펼쳐 둔다 ----
+   passageWanted: 묵상자가 본문을 펼쳐 두기를 바라는가. 관찰이 시작될 때 한 번 펼치고, 그 뒤로는 묵상자가 접고 펼친 대로 둔다.
+   roomy: 배경 설명이나 묵상 정리처럼 인도자의 글이 길어서 본문을 잠시 접고 맨 위 구역을 넓힌 상태. 다음 짧은 질문이 오면 풀린다 */
 const passageToggle = document.getElementById('passage-toggle');
 const passagePanel = document.getElementById('passage-panel');
+let passageWanted = false;
+let observing = false;     // 인도자가 본문 표시나 절 표시를 쓰기 시작했다 = 관찰이 시작되었다
+let roomy = false;
 
 function openPassagePanel(open, pointed = []) {
   passagePanel.hidden = !open;
+  stage.classList.toggle('folded', !open);
   passageToggle.setAttribute('aria-expanded', String(open));
-  passageToggle.textContent = open ? '본문 접기' : `본문 · ${passage ? passage.reference : ''}`;
+  passageToggle.textContent = open ? `본문 접기 · ${passage ? passage.reference : ''}` : `본문 펼치기 · ${passage ? passage.reference : ''}`;
   document.querySelectorAll('.verse-chip.on').forEach(c => c.classList.remove('on'));
-  if (!open) return;
+  if (!open || !passage) return;
   passagePanel.replaceChildren(passageCard(passage.verses, null));
   // 가리킨 절에 색을 칠하고 그 절이 보이도록 펼친 본문 안에서 내려간다 (화면 전체는 움직이지 않는다)
   const rows = pointed.map(v => passagePanel.querySelector(`.verse[data-key="${v.chapter}:${v.start}"]`)).filter(Boolean);
   rows.forEach(r => r.classList.add('hl'));
-  if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 24;
+  if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 8;
 }
-passageToggle.onclick = () => openPassagePanel(passagePanel.hidden);
+passageToggle.onclick = () => { passageWanted = passagePanel.hidden; roomy = false; openPassagePanel(passageWanted); keepQuestionInView(); };
 
 /* '📖 2:30 보기' 단추. 같은 단추를 다시 누르면 펼친 본문을 접는다 */
 function verseChip(verses) {
@@ -1038,10 +1086,61 @@ function verseChip(verses) {
   chip.type = 'button';
   chip.onclick = () => {
     const again = chip.classList.contains('on') && !passagePanel.hidden;
-    openPassagePanel(!again, verses);
+    passageWanted = !again; roomy = false;
+    openPassagePanel(passageWanted, verses);
     if (!again) chip.classList.add('on');
+    keepQuestionInView();
   };
   return chip;
+}
+
+/* 맨 위 구역에 인도자의 지금 말을 놓는다. 지난 질문과 답은 화면에서 치운다 */
+function present(...nodes) {
+  thread.replaceChildren(...nodes);
+  thread.scrollTop = 0;
+}
+
+/* 인도자의 마지막 말을 다시 맨 위에 놓는다 (이어서 하기, 정리를 받지 못하고 묵상으로 돌아갈 때) */
+function showLastGuide() {
+  const last = draft && [...draft.messages].reverse().find(m => m.role === 'assistant' && m.content);
+  present(...(last ? [renderGuide(last.content)] : []));
+  if (last) followGuide(last.content);
+}
+
+/* 질문이 맨 위 구역보다 길면 끝(질문은 보통 말의 끝에 있다)이 보이게 한다. 긴 글(roomy)은 처음부터 읽는다 */
+function keepQuestionInView() {
+  if (!roomy && thread.scrollHeight > thread.clientHeight + 1) thread.scrollTop = thread.scrollHeight;
+}
+
+/* 인도자의 말이 길면(배경 설명 등) 본문을 잠시 접고 맨 위 구역을 넓힌다.
+   길다는 기준은 자판과 상관없이 화면 높이의 40%: 자판이 올라와 질문 구역이 좁아졌다고 본문을 접지는 않는다 */
+const LONG_SHARE = 0.4;
+function fitGuide(forceRoomy = false) {
+  const content = [...thread.children].reduce((sum, n) => sum + n.getBoundingClientRect().height, 0);
+  if (forceRoomy || (!passagePanel.hidden && content > window.innerHeight * LONG_SHARE)) {
+    roomy = true;
+    openPassagePanel(false);
+  }
+  keepQuestionInView();
+}
+
+/* 인도자의 새 말을 보고 본문 구역을 맞춘다.
+   [[본문]]이나 절 표시가 처음 나오면 관찰이 시작된 것이므로 본문을 펼친다. 가리킨 절에는 색을 칠하고 그 절로 내려간다 */
+const MARK = /\[\[\s*([^\[\]]{1,30}?)\s*\]\]/g;
+function followGuide(text) {
+  const marks = passage ? [...text.matchAll(MARK)].map(m => m[1]) : [];
+  const known = marks.map(m => ({ m, verses: markedVerses(m) })).filter(x => x.verses);
+  if (!observing && known.length) { observing = true; passageWanted = true; }
+  let pointed = known.filter(x => !x.m.includes('본문')).flatMap(x => x.verses);
+  if (!pointed.length) pointed = pointedVerses(text.replace(MARK, ' '));
+  roomy = false;
+  openPassagePanel(passageWanted, [...new Set(pointed)]);
+  fitGuide();
+}
+
+/* 이어서 하기: 지난 대화에 본문 표시가 있었으면 관찰을 이미 시작한 것이다 */
+function observedBefore(messages) {
+  return messages.some(m => m.role === 'assistant' && m.content && [...m.content.matchAll(MARK)].some(x => markedVerses(x[1])));
 }
 
 let sessionId = null;
@@ -1221,7 +1320,8 @@ function renderGuide(text) {
       const verses = passage ? markedVerses(part) : null;
       // 같은 절의 표시가 한 말에 두 번 오면 카드는 한 번만. [[본문]]은 늘 전체를 보인다
       if (verses && verses.length && !part.includes('본문') && verses.every(v => carded.has(v))) return;
-      if (part.includes('본문') || !verses || !verses.length) {     // 본문 전체 카드, 또는 본문 밖이라는 알림
+      if (part.includes('본문') && verses) return;   // 본문 전체는 맨 위 구역에 넣지 않고 아래 본문 구역을 펼쳐 보인다 (followGuide)
+      if (!verses || !verses.length) {     // 본문 밖이라는 알림
         const card = markedPassage(part);
         if (card) box.append(card);
         return;
@@ -1341,8 +1441,8 @@ async function send(message, resume = false) {
   const mine = draft;       // 이 글을 보낸 묵상. 답이 늦게 와서 그사이 다른 묵상이 열렸으면 그 답은 버린다
   setBusy(true);
   const waiting = waitingMark('인도자가 쓰고 있습니다');
-  thread.append(waiting);
-  waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  thread.append(waiting);            // 지금 질문 아래에 기다리는 표시. 답이 오면 맨 위 구역을 새 말로 바꾼다
+  waiting.scrollIntoView({ block: 'nearest' });
   if (mine && message) {    // 답을 받기 전에 앱이 닫혀도, 다시 열면 이 글이 글 칸에 돌아온다
     mine.pending = message;
     mine.unsent = messageBox.value;
@@ -1360,9 +1460,8 @@ async function send(message, resume = false) {
       mine.messages.push({ role: 'assistant', content: data.reply });
       store.write('draft', mine);
     }
-    const reply = renderGuide(data.reply);
-    waiting.replaceWith(reply);
-    reply.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    present(renderGuide(data.reply));
+    followGuide(data.reply);
     setBusy(false);
     if (data.completed && !askedToWrapUp) {
       askedToWrapUp = true;
@@ -1379,7 +1478,7 @@ async function send(message, resume = false) {
     retry.onclick = () => { failed.remove(); send(message, resume); };
     failed.append(el('p', '', `답을 받지 못했습니다. ${e.message}`), retry);
     waiting.replaceWith(failed);
-    failed.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    failed.scrollIntoView({ block: 'nearest' });
     // busy를 풀지 않는다: 같은 글을 다시 보내기 전에는 새 글을 보낼 수 없다
   }
 }
@@ -1436,6 +1535,7 @@ function askToWrapUp() {
   yes.onclick = () => { box.remove(); showRecord(); };
   more.onclick = () => {
     box.remove();
+    fitGuide();
     showComposer(true);
     wrapUpLink.hidden = false;     // 언제든 정리할 수 있게 입력칸 위에 작은 단추를 남긴다
     messageBox.focus();
@@ -1443,8 +1543,9 @@ function askToWrapUp() {
   const buttons = el('div', 'buttons');
   buttons.append(yes, more);
   box.append(el('p', 'question', '오늘 묵상을 정리해 드릴까요?'), buttons);
-  thread.append(box);
-  box.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  thread.append(box);              // 인도자의 마지막 말 아래에 묻는다. 맨 위 구역을 넓혀 함께 보인다
+  fitGuide(true);
+  box.scrollIntoView({ block: 'nearest' });
 }
 
 /* 화면에 보이는 기록 글을 다시 글자로 옮긴다. 목록은 "- "와 "1. "를 붙여 원래 모양으로 되돌린다. */
@@ -1577,14 +1678,13 @@ async function showRecord(requestId = newId()) {
   showComposer(false);
   wrapUpLink.hidden = true;
   const waiting = waitingMark('묵상 기록을 정리하고 있습니다');
-  thread.append(waiting);
-  waiting.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  present(waiting);                // 묵상 정리는 맨 위 구역을 본문 자리까지 넓혀 보인다
+  fitGuide(true);
   try {
     const record = await withSession(() =>
       api('/api/meditation/record', { session_id: sessionId, request_id: requestId }));
     const card = recordCard(record);
-    waiting.replaceWith(card);
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    present(card);
   } catch (e) {
     const failed = el('div', 'failed');
     failed.setAttribute('role', 'alert');
@@ -1593,7 +1693,7 @@ async function showRecord(requestId = newId()) {
     retry.onclick = () => { failed.remove(); showRecord(requestId); };
     const back = el('button', 'quiet', '묵상으로 돌아가기');
     back.type = 'button';
-    back.onclick = () => { failed.remove(); showComposer(true); wrapUpLink.hidden = false; };
+    back.onclick = () => { showLastGuide(); showComposer(true); wrapUpLink.hidden = false; };
     const buttons = el('div', 'buttons');
     buttons.append(retry, back);
     failed.append(el('p', '', `묵상 기록을 받지 못했습니다. ${e.message}`), buttons);
@@ -1622,6 +1722,7 @@ async function beginMeditation(ref, mode) {
   draft = { date: todayKey, ref: data.passage, mode, messages: [] };
   askedToWrapUp = false;
   sentCount = 0;
+  observing = passageWanted = roomy = false;
   wrapUpLink.hidden = true;
   thread.replaceChildren();
   messageBox.value = '';
@@ -1631,7 +1732,8 @@ async function beginMeditation(ref, mode) {
   // 첫 말은 정해 둔 한 문장이다. 기다리지 않고 바로 보이고, 묵상자는 기도부터 적는다
   draft.messages.push({ role: 'assistant', content: data.opening });
   store.write('draft', draft);
-  thread.append(renderGuide(data.opening));
+  present(renderGuide(data.opening));
+  followGuide(data.opening);
   setBusy(false);
   messageBox.focus({ preventScroll: true });
 }
@@ -1643,14 +1745,9 @@ async function resumeMeditation() {
   passage = { reference: data.passage, verses: data.verses, missing: data.missing };
   currentMode = draft.mode;
   askedToWrapUp = false;
-  thread.replaceChildren();
-  sentCount = 0;
-  for (const message of draft.messages) {
-    if (message.hidden) thread.append(el('p', 'pause', '잠시 멈추었다가 이어서'));
-    else if (message.role === 'user') { thread.append(el('p', 'entry', message.content)); sentCount += 1; }
-    else thread.append(renderGuide(message.content));
-  }
-  thread.append(el('p', 'pause', '잠시 멈추었다가 이어서'));
+  sentCount = draft.messages.filter(m => m.role === 'user' && !m.hidden).length;
+  observing = passageWanted = observedBefore(draft.messages);    // 관찰을 시작했던 묵상이면 본문을 펼친 채로 돌아온다
+  roomy = false;
   wrapUpLink.hidden = sentCount < 6;
   // 보냈는데 답을 받지 못한 글, 적다가 멈춘 글을 글 칸에 돌려놓는다
   const kept = [draft.pending, draft.unsent].filter(t => t && t.trim()).join('\n');
@@ -1659,6 +1756,7 @@ async function resumeMeditation() {
   store.only('draft', draft);
   messageBox.value = kept;
   show('thread');
+  showLastGuide();                 // 화면에는 인도자의 마지막 말만 둔다. 이어서 짚는 말이 오면 그것으로 바뀐다
   composer.hidden = false;
   resizeMessageBox();
   send(null, true);
@@ -2237,6 +2335,7 @@ goHome.onclick = () => {
   renderHome(paused ? '묵상을 보관했습니다. 언제든 이어서 할 수 있습니다.' : '');
   show('home');
 };
+document.getElementById('stage-home').onclick = () => goHome.onclick();   // 묵상 화면에서는 머리줄 대신 본문 줄에 둔다
 
 /* ---- 기록 찾기: 저장한 묵상에서 낱말로 찾는다 ---- */
 const SEARCH_FIELDS = [['passage', '본문'], ['title', '제목'], ['applied_truth', '적용 진리'], ['truth', '진리'],
@@ -2823,8 +2922,7 @@ composer.addEventListener('submit', (event) => {
   event.preventDefault();
   const text = messageBox.value.trim();
   if (!text || busy) return;
-  thread.append(el('p', 'entry', text));
-  sentCount += 1;
+  sentCount += 1;                    // 보낸 글은 화면에 남기지 않는다 (기록에는 남는다)
   if (sentCount >= 6) wrapUpLink.hidden = false;   // 묵상이 어느 정도 진행되면 정리하는 길을 열어 둔다
   messageBox.value = '';
   resizeMessageBox();
@@ -2835,6 +2933,7 @@ function resizeMessageBox() {
   messageBox.style.height = 'auto';
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
   sendButton.disabled = busy || !messageBox.value.trim();
+  keepQuestionInView();             // 글 칸이 커져 질문 구역이 좁아져도 질문이 보이게
 }
 messageBox.addEventListener('input', () => {
   resizeMessageBox();
@@ -2959,33 +3058,55 @@ new ResizeObserver(() => {
   document.documentElement.style.setProperty('--composer-height', composer.offsetHeight + 'px');
 }).observe(composer);
 
-/* 자판이 올라오면 글 쓰는 자리도 자판 바로 위로 올린다.
+/* 자판이 올라오면 돌아보기의 묻는 자리를 자판 바로 위로 올린다.
    보이는 화면(visualViewport)과 전체 화면의 차이가 자판의 높이다.
    손가락으로 화면을 밀 때도 주소창이 줄었다 늘었다 하며 이 차이가 잠깐 생긴다. 그때마다 여백을 바꾸고
-   맨 아래로 끌어내리면 화면이 떨린다. 그래서 글 쓰는 칸을 누르고 있고, 차이가 자판만큼 클 때만 올린다 */
+   맨 아래로 끌어내리면 화면이 떨린다. 그래서 글 쓰는 칸을 누르고 있고, 차이가 자판만큼 클 때만 올린다.
+   묵상 화면은 따로: 판 전체를 보이는 영역에 그대로 맞춘다 (페이지가 스크롤되지 않으므로 떨리지 않는다) */
 if (window.visualViewport) {
   const vv = window.visualViewport;
+  const root = document.documentElement;
   const KEYBOARD_AT_LEAST = 150;        // 주소창(50~90px)보다 크고 자판(250px 넘음)보다 작은 값
   let lifted = 0;
   const writing = () => {
     const a = document.activeElement;
     return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['button', 'checkbox', 'radio'].includes(a.type)));
   };
+  const fitStage = () => {
+    root.style.setProperty('--vv-height', vv.height + 'px');
+    root.style.setProperty('--vv-top', Math.max(0, vv.offsetTop) + 'px');
+    root.classList.toggle('keyboard-up', writing() && window.innerHeight - vv.height >= KEYBOARD_AT_LEAST);
+    if (currentView === 'thread') {
+      if (window.scrollY && vv.offsetTop === 0) window.scrollTo(0, 0);   // 자판이 내려간 뒤 사파리가 밀어 둔 페이지를 제자리로
+      keepQuestionInView();
+    }
+  };
   const lift = () => {
+    fitStage();
     const raw = Math.round(window.innerHeight - vv.height - vv.offsetTop);
     const gap = writing() && raw >= KEYBOARD_AT_LEAST ? raw : 0;
     if (gap === lifted) return;            // 바뀐 것이 없으면 아무것도 건드리지 않는다
     const wasAtEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
     lifted = gap;
-    composer.style.bottom = askBar.style.bottom = gap ? gap + 'px' : '';
-    document.documentElement.style.setProperty('--keyboard', gap + 'px');
-    if (gap && wasAtEnd) window.scrollTo(0, document.documentElement.scrollHeight);   // 자판이 막 올라왔을 때 한 번만: 마지막 말이 보이게
+    askBar.style.bottom = gap ? gap + 'px' : '';
+    root.style.setProperty('--keyboard', gap + 'px');
+    if (gap && wasAtEnd && currentView !== 'thread') window.scrollTo(0, document.documentElement.scrollHeight);   // 자판이 막 올라왔을 때 한 번만: 마지막 말이 보이게
   };
   vv.addEventListener('resize', lift);
   vv.addEventListener('scroll', lift);
   document.addEventListener('focusin', lift);
   document.addEventListener('focusout', () => setTimeout(lift, 50));
+  fitStage();
 }
+
+/* 묵상 화면에서는 손가락으로 밀어도 페이지가 끌려가지 않게 한다. 본문·질문 구역과 글 쓰는 칸 안에서 스크롤할 수 있을 때만 움직인다 */
+document.addEventListener('touchmove', (event) => {
+  if (currentView !== 'thread') return;
+  for (let n = event.target; n && n !== stage; n = n.parentElement) {
+    if (n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return;
+  }
+  event.preventDefault();
+}, { passive: false });
 </script>
 </body>
 </html>
