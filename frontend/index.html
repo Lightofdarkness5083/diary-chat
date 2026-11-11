@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Diary with Jesus</title>
 <!-- 홈 화면에 추가하면 주소창 없이 앱처럼 열린다 -->
 <link rel="manifest" href="/manifest.webmanifest">
@@ -485,8 +485,11 @@
 
   /* ---- 묵상 화면: 위에서부터 지금 질문, 본문, 글 쓰는 칸, (자판) ----
      판의 높이와 위치는 자판 위로 실제로 보이는 영역(visualViewport)을 따른다 (--vv-height, --vv-top).
-     페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다 */
+     페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다.
+     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(보이는 높이의 절반까지), 남는 높이는 모두 본문.
+     줄어드는 것은 본문뿐이다 */
   html.meditating, html.meditating body { overflow: hidden; height: 100%; overscroll-behavior: none; }
+  html.meditating main { visibility: hidden; }      /* 묵상 중에는 앱 제목(머리줄)을 숨기고 그 자리를 질문에 쓴다 */
   #stage {
     position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); z-index: 20;
     height: var(--vv-height, 100vh); height: var(--vv-height, 100dvh);
@@ -496,9 +499,9 @@
   #stage[hidden] { display: none; }
   #stage > * { width: 100%; max-width: 38.5rem; margin-left: auto; margin-right: auto; padding-left: 1.25rem; padding-right: 1.25rem; }
 
-  /* 1. 지금 질문: 맨 위. 본문 4줄과 글 쓰는 칸에 자리를 내주고 남는 만큼만 차지한다 */
-  #thread { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-            padding-top: 0.9rem; padding-bottom: 0.4rem; font-size: 1rem; line-height: 1.65; }
+  /* 1. 지금 질문: 맨 위. 높이는 질문이 다 보이는 만큼(fitQuestion이 정한다). 앞의 설명은 이 구역 안에서 위로 밀어 본다 */
+  #thread { position: relative; flex: 0 1 auto; min-height: 2.5rem; overflow-y: auto; overscroll-behavior: contain;
+            padding-top: 0.5rem; padding-bottom: 0.3rem; font-size: 1rem; line-height: 1.6; }
   #thread .guide { margin: 0; }
   #thread .guide > :last-child { margin-bottom: 0; }
   #thread .verse-chips { margin: 0.1rem 0 0.4rem; }
@@ -506,35 +509,39 @@
   #thread .failed, #thread .ask { margin: 0.75rem 0 0.25rem; }
   #thread .record { margin: 0.75rem 0 1rem; }
   /* 본문이 접혀 있거나, 배경 설명·묵상 정리처럼 글이 길 때: 본문 자리까지 넓어지고 그 안에서 스크롤 */
-  #stage.folded #thread { flex: 1 1 auto; }
+  #stage.folded #thread { flex: 1 1 auto; height: auto !important; }
 
   /* 본문 구역의 머리줄: 접기/펼치기, 정리하기, 달력으로 */
   #stage .tools { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
-                  padding-top: 0.35rem; padding-bottom: 0.35rem; border-top: 1px solid var(--line); }
+                  padding-top: 0.2rem; padding-bottom: 0.2rem; border-top: 1px solid var(--line); }
   #stage .tools .tools-end { display: flex; gap: 0.9rem; }
   #stage .tools button.link { margin: 0; padding: 0.1rem 0; font-size: 0.8125rem; }
 
-  /* 2. 펼친 본문: 작은 글씨, 이 구역 안에서만 스크롤. 자판이 올라와도 네 줄 넘게 남는다 */
-  #passage-panel { flex: 1 1 0; min-height: calc(4 * 0.875rem * 1.7 + 1.1rem); overflow-y: auto; overscroll-behavior: contain;
-                   padding-bottom: 0.4rem; }
-  #passage-panel .passage { margin: 0; padding: 0.45rem 0.75rem 0.2rem; font-size: 0.875rem; }
-  #passage-panel .verses { row-gap: 0.2rem; }
-  #passage-panel .verse .number { font-size: 0.75rem; padding-top: 0.15rem; }
-  #passage-panel .verse .text { line-height: 1.7; }
+  /* 2. 펼친 본문: 남는 높이를 모두 갖고 이 구역 안에서만 스크롤. 줄어드는 것은 이 구역뿐이다.
+        글씨를 작게, 번호 칸과 여백을 좁혀 한 줄에 글자가 더 들어가게 한다 */
+  #passage-panel { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0.25rem; }
+  #passage-panel .passage { margin: 0; padding: 0.3rem 0.5rem 0.1rem; font-size: 0.8125rem; }
+  #passage-panel .verses { column-gap: 0.45rem; row-gap: 0.1rem; margin-bottom: 0.2rem; }
+  #passage-panel .verse .number { font-size: 0.6875rem; padding-top: 0.1rem; }
+  #passage-panel .verse .text { line-height: 1.6; }
 
   /* 3. 글 쓰는 칸: 자판 바로 위. 자판이 올라오면 아래 여백(홈 표시줄 자리)을 없앤다 */
   #composer { flex: none; border-top: 1px solid var(--line);
-              padding-top: 0.5rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
-  html.keyboard-up #composer { padding-bottom: 0.4rem; }
+              padding-top: 0.35rem; padding-bottom: calc(0.35rem + env(safe-area-inset-bottom, 0px)); }
+  html.keyboard-up #composer { padding-bottom: 0.35rem; }
   #composer[hidden] { display: none; }
   #composer.resting textarea, #composer.resting button { opacity: 0.4; }
-  #composer .row { display: flex; gap: 0.5rem; align-items: flex-end; }
+  /* 글 칸은 화면 폭을 다 쓴다. 보내기 단추는 글 칸 오른쪽 아래 구석 안에 작게 둔다 */
+  #composer .row { position: relative; display: block; }
   #composer textarea {
-    flex: 1; min-width: 0; resize: none; max-height: 7.2rem; padding: 0.55rem 0.8rem;
+    display: block; width: 100%; resize: none; padding: 0.4rem 2.6rem 0.4rem 0.7rem;
+    max-height: calc(var(--vv-height, 100dvh) * 0.5);
     font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
     background: transparent; border: 1px solid var(--line); border-radius: 8px;
   }
-  #composer button[type=submit] { padding: 0.6rem 1rem; }
+  #composer button[type=submit] { position: absolute; right: 0.3rem; bottom: 0.3rem; margin: 0;
+    width: 2rem; height: 2rem; padding: 0; border-radius: 50%; font-size: 1.05rem; line-height: 1; }
+  #composer button[type=submit]:disabled { opacity: 0.35; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -721,7 +728,7 @@
     <div class="row">
       <label class="sr-only" for="message">묵상 적기</label>
       <textarea id="message" rows="1" placeholder="여기에 적어 주세요" autocomplete="off" data-form-type="other" enterkeyhint="enter"></textarea>
-      <button type="submit" id="send" disabled>보내기</button>
+      <button type="submit" id="send" aria-label="보내기" disabled>↑</button>
     </div>
   </form>
 </div>
@@ -1098,6 +1105,7 @@ function verseChip(verses) {
 function present(...nodes) {
   thread.replaceChildren(...nodes);
   thread.scrollTop = 0;
+  keepQuestionInView();
 }
 
 /* 인도자의 마지막 말을 다시 맨 위에 놓는다 (이어서 하기, 정리를 받지 못하고 묵상으로 돌아갈 때) */
@@ -1107,17 +1115,43 @@ function showLastGuide() {
   if (last) followGuide(last.content);
 }
 
-/* 질문이 맨 위 구역보다 길면 끝(질문은 보통 말의 끝에 있다)이 보이게 한다. 긴 글(roomy)은 처음부터 읽는다 */
+/* 질문 구역의 높이: 인도자의 말 가운데 마지막 질문(물음표가 있는 마지막 문단이나 목록)부터 끝까지가 다 보이는 만큼.
+   질문 앞의 설명은 이 구역 안에서 위로 밀어 읽고, 처음에는 질문이 보이는 위치에 둔다.
+   남는 높이는 모두 본문이 갖는다. 본문을 접었거나 긴 글(roomy)일 때는 구역이 본문 자리까지 넓어진다 */
+function questionStart() {
+  const guide = thread.querySelector('.guide');
+  if (!guide) return 0;
+  const blocks = [...guide.children].filter(n => !n.classList.contains('verse-chips'));
+  const asked = [...blocks].reverse().find(n => /[?？]/.test(n.textContent));
+  const first = asked || blocks[blocks.length - 1];
+  return first ? first.offsetTop : 0;
+}
 function keepQuestionInView() {
-  if (!roomy && thread.scrollHeight > thread.clientHeight + 1) thread.scrollTop = thread.scrollHeight;
+  if (stage.hidden) return;
+  const style = getComputedStyle(thread);
+  const padTop = parseFloat(style.paddingTop) || 0;
+  if (stage.classList.contains('folded')) {
+    thread.style.height = '';
+    if (!roomy && thread.scrollHeight > thread.clientHeight + 1) thread.scrollTop = Math.max(0, questionStart() - padTop);
+    return;
+  }
+  const from = Math.max(0, questionStart() - padTop);       // 질문 위에 위쪽 여백만큼 남긴다
+  thread.style.height = Math.ceil(thread.scrollHeight - from) + 'px';
+  thread.scrollTop = from;
 }
 
 /* 인도자의 말이 길면(배경 설명 등) 본문을 잠시 접고 맨 위 구역을 넓힌다.
    길다는 기준은 자판과 상관없이 화면 높이의 40%: 자판이 올라와 질문 구역이 좁아졌다고 본문을 접지는 않는다 */
 const LONG_SHARE = 0.4;
+// 자판이 내려가 있을 때의 화면 높이. 안드로이드는 자판이 올라오면 innerHeight 자체가 줄어서, 그 값으로는 재지 않는다
+let tallestView = window.innerHeight;
+window.addEventListener('resize', () => {
+  const a = document.activeElement;
+  if (!(a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT'))) tallestView = window.innerHeight;
+});
 function fitGuide(forceRoomy = false) {
   const content = [...thread.children].reduce((sum, n) => sum + n.getBoundingClientRect().height, 0);
-  if (forceRoomy || (!passagePanel.hidden && content > window.innerHeight * LONG_SHARE)) {
+  if (forceRoomy || (!passagePanel.hidden && content > Math.max(tallestView, window.innerHeight) * LONG_SHARE)) {
     roomy = true;
     openPassagePanel(false);
   }
@@ -1442,7 +1476,7 @@ async function send(message, resume = false) {
   setBusy(true);
   const waiting = waitingMark('인도자가 쓰고 있습니다');
   thread.append(waiting);            // 지금 질문 아래에 기다리는 표시. 답이 오면 맨 위 구역을 새 말로 바꾼다
-  waiting.scrollIntoView({ block: 'nearest' });
+  keepQuestionInView();
   if (mine && message) {    // 답을 받기 전에 앱이 닫혀도, 다시 열면 이 글이 글 칸에 돌아온다
     mine.pending = message;
     mine.unsent = messageBox.value;
@@ -1478,7 +1512,7 @@ async function send(message, resume = false) {
     retry.onclick = () => { failed.remove(); send(message, resume); };
     failed.append(el('p', '', `답을 받지 못했습니다. ${e.message}`), retry);
     waiting.replaceWith(failed);
-    failed.scrollIntoView({ block: 'nearest' });
+    keepQuestionInView();
     // busy를 풀지 않는다: 같은 글을 다시 보내기 전에는 새 글을 보낼 수 없다
   }
 }
@@ -2930,10 +2964,30 @@ composer.addEventListener('submit', (event) => {
 });
 
 function resizeMessageBox() {
+  const atEnd = messageBox.selectionEnd === messageBox.value.length;
   messageBox.style.height = 'auto';
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
+  // 글 칸이 상한(보이는 높이의 절반)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
+  if (atEnd) messageBox.scrollTop = messageBox.scrollHeight;
+  else caretIntoView();
   sendButton.disabled = busy || !messageBox.value.trim();
   keepQuestionInView();             // 글 칸이 커져 질문 구역이 좁아져도 질문이 보이게
+}
+/* 글 가운데를 고칠 때: 글 칸 안에서 커서가 있는 줄이 보이게 내린다 (커서 앞 글의 높이를 재어 본다) */
+function caretIntoView() {
+  if (messageBox.scrollHeight <= messageBox.clientHeight + 1) return;
+  const style = getComputedStyle(messageBox);
+  const probe = document.createElement('div');
+  for (const k of ['fontFamily', 'fontSize', 'lineHeight', 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth', 'letterSpacing', 'wordBreak', 'overflowWrap'])
+    probe.style[k] = style[k];
+  Object.assign(probe.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre-wrap', boxSizing: 'border-box', width: messageBox.offsetWidth + 'px', top: '0', left: '-9999px' });
+  probe.textContent = messageBox.value.slice(0, messageBox.selectionEnd) + '\u200b';
+  document.body.append(probe);
+  const caretBottom = probe.offsetHeight;
+  probe.remove();
+  const line = parseFloat(style.lineHeight) || 24;
+  if (caretBottom > messageBox.scrollTop + messageBox.clientHeight) messageBox.scrollTop = caretBottom - messageBox.clientHeight + 4;
+  else if (caretBottom - line < messageBox.scrollTop) messageBox.scrollTop = Math.max(0, caretBottom - line - 8);
 }
 messageBox.addEventListener('input', () => {
   resizeMessageBox();
@@ -3072,15 +3126,20 @@ if (window.visualViewport) {
     const a = document.activeElement;
     return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['button', 'checkbox', 'radio'].includes(a.type)));
   };
+  /* 묵상 판을 보이는 영역에 맞춘다. 안드로이드 크롬은 자판이 페이지 높이 자체를 줄인다(interactive-widget=resizes-content).
+     아이폰 사파리는 자판이 올라올 때 글 칸을 보이려고 페이지를 위로 밀어 올린다: 묵상 중에는 늘 제자리(0)로 되돌리고,
+     판의 위치와 높이를 되돌린 뒤의 보이는 영역 값으로 다시 잰다 */
   const fitStage = () => {
+    if (currentView === 'thread' && (window.scrollY || window.scrollX)) window.scrollTo(0, 0);
     root.style.setProperty('--vv-height', vv.height + 'px');
     root.style.setProperty('--vv-top', Math.max(0, vv.offsetTop) + 'px');
     root.classList.toggle('keyboard-up', writing() && window.innerHeight - vv.height >= KEYBOARD_AT_LEAST);
-    if (currentView === 'thread') {
-      if (window.scrollY && vv.offsetTop === 0) window.scrollTo(0, 0);   // 자판이 내려간 뒤 사파리가 밀어 둔 페이지를 제자리로
-      keepQuestionInView();
-    }
+    if (currentView === 'thread') keepQuestionInView();
   };
+  // 자판이 오르내리는 동안 값이 여러 번 바뀐다. 그릴 때마다 한 번, 마지막 값으로 맞춘다
+  let fitting = 0;
+  const fitSoon = () => { if (!fitting) fitting = requestAnimationFrame(() => { fitting = 0; fitStage(); }); };
+  window.addEventListener('scroll', () => { if (currentView === 'thread') fitSoon(); }, { passive: true });
   const lift = () => {
     fitStage();
     const raw = Math.round(window.innerHeight - vv.height - vv.offsetTop);
@@ -3096,6 +3155,10 @@ if (window.visualViewport) {
   vv.addEventListener('scroll', lift);
   document.addEventListener('focusin', lift);
   document.addEventListener('focusout', () => setTimeout(lift, 50));
+  // 자판이 다 올라온 뒤에 한 번 더 맞춘다 (올라오는 도중의 값에 머물지 않게)
+  document.addEventListener('focusin', () => { if (currentView === 'thread') { setTimeout(fitSoon, 350); setTimeout(fitSoon, 700); } });
+  vv.addEventListener('resize', fitSoon);
+  vv.addEventListener('scroll', fitSoon);
   fitStage();
 }
 
