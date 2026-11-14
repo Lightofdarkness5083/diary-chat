@@ -28,15 +28,19 @@ record_answers, finish_answers, finish_seen = [], [], []
 suggest_answers, suggest_seen = [], []
 
 
-def fake(system, messages):
+def fake(system, messages, job=None):
     if "묵상 완료 기록" in system:           # 기록 정리 요청
+        assert job == "record", job
         return record_answers.pop(0)
     if "한 단락으로 마무리" in system:        # 끝 절을 제안해 달라는 요청
+        assert job == "suggest", job
         suggest_seen.append(messages[0]["content"])
         return suggest_answers.pop(0)
     if "끝났는지 판단" in system:            # 묵상이 끝났는지 확인하는 요청
+        assert job == "finish", job
         finish_seen.append(messages[0]["content"])
         return finish_answers.pop(0)
+    assert job in ("guide", "respell"), job       # 맞춤법 요청에 엉뚱한 답을 주면 원문이 쓰이는지도 함께 본다
     return GUIDE[min(len(messages) // 2, len(GUIDE) - 1)]
 
 
@@ -84,10 +88,10 @@ client.post(f"{API}/chat", json={"session_id": other, "message": None})
 finish_answers[:] = ["진행중"]
 for i in range(6):
     assert client.post(f"{API}/chat", json={"session_id": other, "message": f"글 {i}"}).json()["completed"] is False
-def broken(system, messages):
+def broken(system, messages, job=None):
     if "끝났는지 판단" in system:
         raise ai_client.AIError("확인 실패")
-    return fake(system, messages)
+    return fake(system, messages, job)
 ai_client.reply = broken
 assert client.post(f"{API}/chat", json={"session_id": other, "message": "하나 더"}).json()["completed"] is False
 ai_client.reply = fake
@@ -132,9 +136,9 @@ assert record._strange_quotes(changed, said) == ["난 것이 아니"]
 kept = dict(changed, interpretation='- "난 것이 아님"이 두 번 반복되는 것은 구원이 "선물"이라는 뜻이다.')
 assert record._strange_quotes(kept, said) == []                      # 묵상자가 쓴 표현은 그대로 두어도 된다
 asked_again = []
-def twice(system, messages):
+def twice(system, messages, job=None):
     if "묵상 완료 기록" not in system:
-        return fake(system, messages)
+        return fake(system, messages, job)
     asked_again.append(messages[0]["content"])
     wrong = len(asked_again) == 1
     return good(interpretation='- "주께 하는 듯"이라는 말이 되풀이된다.' if wrong else '- "주께 하듯"이라는 말이 되풀이된다.')
@@ -143,15 +147,18 @@ made = client.post(f"{API}/record", json={"session_id": sid}).json()
 assert made["interpretation"] == '- "주께 하듯"이라는 말이 되풀이된다.' and len(asked_again) == 2
 assert "- 주께 하는 듯" in asked_again[1] and "묵상자가 쓴 표현 그대로" in asked_again[1]
 asked_again.clear()
-ai_client.reply = lambda system, messages: twice(system, messages) if not asked_again else good(interpretation='- "주께 하는 듯"이라고 또 바꿈')
+ai_client.reply = lambda system, messages, job=None: twice(system, messages, job) if not asked_again else good(interpretation='- "주께 하는 듯"이라고 또 바꿈')
 made = client.post(f"{API}/record", json={"session_id": sid}).json()    # 두 번 다 바꿔 쓰면 처음 정리한 것을 쓴다 (기록은 나온다)
 assert made["interpretation"] == '- "주께 하는 듯"이라는 말이 되풀이된다.'
 ai_client.reply = fake
 
 # 원문으로 돌아갈 때에도 원문의 오타는 따로 바로잡는다. 그 교정이 낱말을 바꾸면 원문 그대로 쓴다
 def respell(answer):
-    def reply(system, messages):
-        return answer if "맞춤법과 띄어쓰기만 바로잡아" in system else fake(system, messages)
+    def reply(system, messages, job=None):
+        if "맞춤법과 띄어쓰기만 바로잡아" in system:
+            assert job == "respell", job
+            return answer
+        return fake(system, messages, job)
     return reply
 ai_client.reply = respell("모든 관계의 주인은 그리스도시다.")
 assert record._original("전혀 다른 문장입니다.", 1, ["모든 관게의 주인은 그리스도 시다"], "truth") == "모든 관계의 주인은 그리스도시다."
@@ -210,7 +217,7 @@ assert client.get(f"{API}/suggest", params={"book": "골로새서", "chapter": 4
 for wrong in ["5:1", "모르겠습니다"]:                            # 없는 절이면 제안하지 않는다
     suggest_answers[:] = [wrong]
     assert client.get(f"{API}/suggest", params={"book": "골로새서", "chapter": 4, "verse": 6}).json()["end"] is None
-def no_suggest(system, messages):
+def no_suggest(system, messages, job=None):
     raise ai_client.AIError("제안 실패")
 ai_client.reply = no_suggest                                      # AI가 답하지 못해도 오류가 아니다
 assert client.get(f"{API}/suggest", params={"book": "골로새서", "chapter": 4, "verse": 6}).json()["end"] is None
@@ -227,7 +234,7 @@ saved = [{"role": "assistant", "content": GUIDE[0]}, {"role": "user", "content":
 back = client.post(f"{API}/resume", json={"ref": "골로새서 3:18-4:1", "messages": saved}).json()
 assert back["passage"] == "골로새서 3:18-4:1" and back["session_id"] != sid and back["verses"]
 seen = []
-def spy(system, messages):
+def spy(system, messages, job=None):
     seen.append([m["content"] for m in messages]); return "아침에 본문을 읽으셨지요. 이어서 볼게요."
 ai_client.reply = spy
 welcome = client.post(f"{API}/chat", json={"session_id": back["session_id"], "message": None, "resume": True}).json()
@@ -242,7 +249,7 @@ assert client.post(f"{API}/resume", json={"ref": "골로새서 3:18-4:1", "messa
 # 연결이 끊겨 같은 글이 두 번 와도 대화가 두 번 쌓이지 않는다. 이미 받은 답을 그대로 돌려준다
 twice = client.post(f"{API}/start", json={"ref": "골 4:2-6"}).json()["session_id"]
 calls = []
-def counting(system, messages):
+def counting(system, messages, job=None):
     calls.append(1); return f"답 {len(messages)}"
 ai_client.reply = counting
 for _ in range(2):      # 첫 말: AI를 부르지 않는다

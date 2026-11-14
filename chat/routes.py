@@ -200,7 +200,7 @@ def _answer(request, authorization):
     today = request.today if DATE.fullmatch(request.today) else datetime.date.today().isoformat()
     system = read_prompt("chat_system.md") + "\n\n<기록의 윤곽>\n" + overview(records, today) + "\n</기록의 윤곽>"
     try:
-        answer = ai_client.reply_with_tools(system, messages, TOOLS, make_tools(records))
+        answer = ai_client.reply_with_tools(system, messages, TOOLS, make_tools(records), job="chat")
     except ai_client.AIError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
     if uid is None:                                    # 일기장이 꺼져 있으면 남기지 않는다

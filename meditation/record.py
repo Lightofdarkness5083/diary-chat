@@ -99,7 +99,7 @@ RESPELL_PROMPT = ("아래 글의 맞춤법과 띄어쓰기만 바로잡아 그�
 def _respell(text):
     """묵상자의 원문에서 오타만 바로잡는다. 바로잡은 글이 원문과 낱말이 다르거나 줄었으면 원문을 그대로 쓴다."""
     try:
-        fixed = ai_client.reply(RESPELL_PROMPT, [{"role": "user", "content": text}]).strip()
+        fixed = ai_client.reply(RESPELL_PROMPT, [{"role": "user", "content": text}], job="respell").strip()
     except ai_client.AIError:
         return text
     whole = len(_jamo(fixed)) >= 0.9 * len(_jamo(text))
@@ -175,7 +175,7 @@ def build_record(session):
     texts, problem, note = None, None, ""
     for _ in range(2):  # 모양이 맞지 않거나 묵상자의 표현이 바뀌었으면 한 번 더 요청한다
         try:
-            made = _parse(ai_client.reply(prompt, [{"role": "user", "content": asking + note}]), originals)
+            made = _parse(ai_client.reply(prompt, [{"role": "user", "content": asking + note}], job="record"), originals)
         except ai_client.AIError as error:
             if texts is not None:
                 break               # 다시 묻다가 실패하면 처음 정리한 것을 쓴다
