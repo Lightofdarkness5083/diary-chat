@@ -94,8 +94,6 @@ APP_FILES = {
     "icon-192.png": "image/png",
     "icon-512.png": "image/png",
     "icon-maskable-512.png": "image/png",
-    "guide.mp4": "video/mp4",              # 안내 쪽의 1분 영상
-    "guide-poster.jpg": "image/jpeg",
 }
 
 
