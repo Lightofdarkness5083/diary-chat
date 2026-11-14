@@ -152,6 +152,13 @@
   .account { margin: 0 0 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem; }
   .account button.link { display: inline; width: auto; margin: 0 0 0 0.5rem; padding: 0; font-size: 0.8125rem; }
   .guide-page h2 { margin: 0 0 0.9rem; font-family: var(--serif); font-size: 1.5rem; line-height: 1.4; }
+  .film { position: relative; width: min(100%, 21rem); margin: 0 auto; }
+  #guide-video { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 16px; background: #162858; cursor: pointer; }
+  .film-play { position: absolute; left: 50%; top: 50%; width: 5rem; height: 5rem; margin: -2.5rem 0 0 -2.5rem; padding: 0 0 0 0.3rem;
+               border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.94); color: #162858; font-size: 2rem; line-height: 1;
+               box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35); cursor: pointer; }
+  .film-play[hidden] { display: none; }
+  .film-bar { margin: 0.5rem 0 1.5rem; text-align: center; font-size: 0.9375rem; color: var(--muted); }
   .guide-page .preface { margin: 0 0 1.75rem; font-family: var(--serif); font-size: 1.0625rem; line-height: 1.9; }
   .guide-page .preface p { margin: 0 0 0.8rem; }
   .guide-page ol { list-style: none; margin: 0 0 1.5rem; padding: 0; counter-reset: step; border-top: 1px solid var(--line); }
@@ -610,6 +617,14 @@
 
   <!-- 안내: 이 일기장으로 묵상하는 법. 처음 한 번 보이고, 익숙한 사람은 넘긴다 -->
   <section id="guide" class="guide-page" hidden>
+    <!-- 1분 안내 영상: 나레이션과 배경 음악이 있다. 소리가 나므로 저절로 틀지 않고, 큰 단추를 눌러 시작한다.
+         아래의 글 안내(묵상의 뜻, 7단계)는 그대로 둔다 -->
+    <div class="film">
+      <video id="guide-video" src="guide.mp4" poster="guide-poster.jpg" playsinline preload="metadata"
+             aria-label="Diary with Jesus로 묵상하는 법을 들려주는 1분 안내 영상"></video>
+      <button type="button" id="guide-video-play" class="film-play" aria-label="안내 영상 보기 (소리가 납니다)"><span aria-hidden="true">▶</span></button>
+    </div>
+    <p class="film-bar" id="guide-video-note">1분 안내 영상 · 누르면 소리와 함께 시작합니다</p>
     <div class="preface">
       <p>성경은 쓰여진 시대의 역사적 상황 안에서, 원독자가 살고 있는 문화적 배경 안에서 그들의 언어와 문학 양식의 방법으로 저자를 통해 말씀하시는 하나님의 음성입니다.</p>
       <p>말씀 한 단락을 읽고 질문하고 답하며 오늘도 나에게 말씀하시는 하나님을 만나며 진리를 스스로 찾고 적용하는 삶을 살아가기, 묵상하는 삶입니다.</p>
@@ -1037,6 +1052,8 @@ const askBar = document.getElementById('ask-bar');
 
 function show(name) {
   currentView = name;
+  const film = document.getElementById('guide-video');     // 안내 영상: 안내 쪽을 떠나면 멈춘다
+  if (name !== 'guide' && !film.paused) film.pause();
   if (name === 'guide') {          // 로그인 전이면 안내의 끝에서 Google 계정으로 시작한다
     const needAccount = !!appConfig.login && !account;
     document.getElementById('guide-account').hidden = !needAccount;
@@ -3007,6 +3024,17 @@ async function leaveGuide() {
   if (firstTimer()) openEntry(); else show('home');          // 처음 온 사람은 안내를 지나 바로 본문 고르기로
 }
 document.getElementById('guide-done').onclick = leaveGuide;
+{ // 안내 영상: 큰 단추나 영상을 누르면 소리와 함께 시작하고, 다시 누르면 멈춘다. 끝나면 처음부터 다시 볼 수 있다
+  const film = document.getElementById('guide-video'), play = document.getElementById('guide-video-play'), note = document.getElementById('guide-video-note');
+  const mark = () => {
+    play.hidden = !film.paused && !film.ended;
+    play.firstElementChild.textContent = film.ended ? '↻' : '▶';
+    note.textContent = film.ended ? '다시 보려면 누르세요' : film.paused ? (film.currentTime > 0 ? '잠시 멈춤 · 누르면 이어집니다' : '1분 안내 영상 · 누르면 소리와 함께 시작합니다') : '영상을 누르면 멈춥니다';
+  };
+  const flip = () => { if (film.paused || film.ended) film.play().catch(() => {}); else film.pause(); };
+  for (const name of ['play', 'playing', 'pause', 'ended']) film.addEventListener(name, mark);
+  film.onclick = play.onclick = flip;
+}
 document.getElementById('skip-guide').onclick = leaveGuide;
 const coverNote = document.getElementById('cover-note');
 let entered = false;
