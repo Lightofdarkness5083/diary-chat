@@ -73,7 +73,8 @@ client = TestClient(app)
 seen = {}
 
 
-def fake(system, messages, tools, run_tool):
+def fake(system, messages, tools, run_tool, job=None):
+    assert job == "chat", job
     seen.update(system=system, messages=messages, tools=[t["name"] for t in tools])
     return "📖 내 묵상에서\n" + run_tool("book_records", {"book": "여호수아"})
 
@@ -121,7 +122,7 @@ del os.environ["DIARY_DEV_LOGIN"]
 access.reset()
 
 
-def failing(system, messages, tools, run_tool):
+def failing(system, messages, tools, run_tool, job=None):
     raise ai_client.AIError("AI API 오류")
 
 

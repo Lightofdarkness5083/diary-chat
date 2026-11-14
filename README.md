@@ -169,10 +169,24 @@ iPhone Safari는 다른 주소끼리 로그인 결과를 주고받는 것을 막
 .venv/bin/python -m tests.test_passcode
 .venv/bin/python -m tests.test_cors
 .venv/bin/python -m tests.test_conversations
+.venv/bin/python -m tests.test_ai_client
 .venv/bin/python -m tests.test_gate
 ```
 
 AI를 실제로 부르지 않고, 흉내 낸 답으로 대화 흐름과 기록의 모양을 확인한다.
+
+## AI 모델과 비용
+
+일에 따라 모델을 나눈다. 마음과 말이 중요한 일은 Sonnet, 짧고 정답이 분명한 일은 Haiku가 맡는다.
+
+| 일 | 모델 |
+|---|---|
+| 묵상 인도자의 말, 돌아보기 비서 | Sonnet (`AI_MODEL`) |
+| 끝났는지 확인, 맞춤법, 묵상 기록 정리, 끝 절 제안 | Haiku (`AI_SMALL_MODEL`) |
+
+- 한 가지 일만 바꾸려면 `AI_MODEL_<일>`을 정한다. 예: `AI_MODEL_RECORD=claude-sonnet-5-5`
+- 묵상 인도는 매번 지시문, 본문, 앞의 대화를 다시 보내므로 1시간 캐시를 건다. 다시 읽는 부분은 값이 싸다.
+- 서버 기록에 일마다 모델과 토큰 수(input, cache_read, cache_write, output)가 한 줄씩 남는다. 묵상 내용은 남기지 않는다.
 
 ## 왜 Claude인가
 

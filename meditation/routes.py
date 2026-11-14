@@ -87,7 +87,7 @@ def finished(messages):
         ("[묵상자]\n" if m["role"] == "user" else "[인도자]\n") + m["content"] for m in messages[-4:])
     prompt = read_prompt("meditation_finish.md")
     try:
-        verdict = ai_client.reply(prompt, [{"role": "user", "content": tail}])
+        verdict = ai_client.reply(prompt, [{"role": "user", "content": tail}], job="finish")
     except ai_client.AIError:
         return False
     return verdict.strip().startswith("끝남")
@@ -224,7 +224,7 @@ def suggest(book: str, chapter: int = 1, verse: int = 0):
     lines = "\n".join(f'{u["chapter"]}:{u["label"]} {u["text"]}' for u in found["verses"])
     prompt = read_prompt("meditation_suggest.md")
     try:
-        answer = ai_client.reply(prompt, [{"role": "user", "content": lines}])
+        answer = ai_client.reply(prompt, [{"role": "user", "content": lines}], job="suggest")
     except ai_client.AIError:
         return nothing
     match = re.search(r"(\d+)\s*:\s*(\d+)(?:\s*-\s*(\d+))?", answer)
@@ -322,7 +322,7 @@ def chat(request: ChatRequest):
 
     messages.append({"role": "user", "content": text})
     try:
-        answer = ai_client.reply(session["system"], messages)
+        answer = ai_client.reply(session["system"], messages, job="guide")
     except ai_client.AIError as e:
         messages.pop()  # 답을 받지 못했으면 기록에 남기지 않는다 (다시 보내도 중복되지 않게)
         return error(str(e), 502)
