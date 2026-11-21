@@ -64,11 +64,12 @@ started = client.post(f"{API}/start", json={"ref": "골 3:18-4:1"}).json()
 sid = started["session_id"]
 assert [started[k] for k in record.POSITION_FIELDS] == ["골로새서", 3, 18, 4, 1, "골로새서 3:18-4:1"]
 assert started["verses"][0]["label"] == "18-19"
-assert started["opening"] == "기도로 묵상을 시작하겠습니다."        # 첫 말은 AI가 짓지 않는다. 늘 이 한 문장이다
+assert "opening" not in started                                  # 앱이 정해 둔 첫 말은 없다. 7단계는 처음부터 인도자가 인도한다
 
 # 대화: 인도자의 말은 손대지 않고 그대로 내보낸다. 묵상자의 글이 6개가 되기 전에는 끝을 확인하지 않는다
 first = client.post(f"{API}/chat", json={"session_id": sid, "message": None}).json()
-assert first == {"reply": started["opening"], "completed": False}   # 첫 말을 청해도 같은 문장이 온다
+assert first == {"reply": GUIDE[0], "completed": False}            # 글 없이 부르면 인도자가 1단계부터 말을 연다
+assert routes.SESSIONS[sid]["messages"][0]["content"] == routes.START_SIGNAL
 assert client.post(f"{API}/record", json={"session_id": sid}).status_code == 409   # 아직 정리할 것이 없다
 for text in USER[:5]:
     reply = client.post(f"{API}/chat", json={"session_id": sid, "message": text}).json()
@@ -191,7 +192,7 @@ assert failed.status_code == 502 and "정리하지 못했습니다" in failed.js
 
 # AI에게 보낸 대화에는 묵상자의 글에 번호가 붙고, 시작 신호와 본문 표시는 빠진다
 text, originals = record._transcript(routes.SESSIONS[sid]["messages"])
-assert originals == USER and text.startswith("[인도자]\n기도로 묵상을 시작하겠습니다.")
+assert originals == USER and text.startswith("[인도자]\n" + GUIDE[0])        # 인도자의 첫 말(1단계)부터
 assert "[묵상자 5]\n" + TRUTH in text and "[[" not in text and "시작했습니다" not in text
 
 # 단락을 나눈 책: AI에게 묻지 않고 다음 절이 든 단락의 끝까지 (bible/paragraphs.json)
@@ -252,11 +253,11 @@ calls = []
 def counting(system, messages, job=None):
     calls.append(1); return f"답 {len(messages)}"
 ai_client.reply = counting
-for _ in range(2):      # 첫 말: AI를 부르지 않는다
-    assert client.post(f"{API}/chat", json={"session_id": twice, "message": None, "expect": 0}).json()["reply"] == started["opening"]
+for _ in range(2):      # 첫 말: 같은 요청이 두 번 와도 인도자는 한 번만 부른다
+    assert client.post(f"{API}/chat", json={"session_id": twice, "message": None, "expect": 0}).json()["reply"] == "답 1"
 for _ in range(2):      # 묵상자의 글
     assert client.post(f"{API}/chat", json={"session_id": twice, "message": "기도합니다.", "expect": 2}).json()["reply"] == "답 3"
-assert len(calls) == 1 and len(routes.SESSIONS[twice]["messages"]) == 4
+assert len(calls) == 2 and len(routes.SESSIONS[twice]["messages"]) == 4
 assert client.post(f"{API}/chat", json={"session_id": twice, "message": "기도합니다.", "expect": 4}).json()["reply"] == "답 5"   # 같은 말을 정말 한 번 더 쓴 것은 새 글이다
 ai_client.reply = fake
 
