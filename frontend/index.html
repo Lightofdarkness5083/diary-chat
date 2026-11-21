@@ -1773,14 +1773,7 @@ async function beginMeditation(ref, mode) {
   messageBox.value = '';
   show('thread');
   composer.hidden = false;
-  if (!data.opening) { send(null); return; }       // 첫 말을 정해 두지 않은 예전 서버
-  // 첫 말은 정해 둔 한 문장이다. 기다리지 않고 바로 보이고, 묵상자는 기도부터 적는다
-  draft.messages.push({ role: 'assistant', content: data.opening });
-  store.write('draft', draft);
-  present([renderGuide(data.opening)]);
-  followGuide(data.opening);
-  setBusy(false);
-  messageBox.focus({ preventScroll: true });
+  send(null);                      // 첫 말은 인도자가 연다 (1단계 시작 기도부터). 그동안 "인도자가 쓰고 있습니다"가 보인다
 }
 
 /* ---- 이어서 하기: 멈췄던 묵상의 대화를 화면에 되살리고, 인도자가 멈춘 곳에서 이어 간다 ---- */

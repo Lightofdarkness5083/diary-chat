@@ -35,7 +35,7 @@ from settings import read_prompt
 
 from . import ai_client
 from .record import RecordError, build_record
-from .signals import OPENING, RESUME_SIGNAL, SIGNALS, START_SIGNAL
+from .signals import RESUME_SIGNAL, SIGNALS, START_SIGNAL
 
 ONCE = Once()          # 같은 정리 요청을 다시 보내도 AI를 한 번만 부른다
 
@@ -249,11 +249,9 @@ def start(request: StartRequest):
     if len(SESSIONS) >= MAX_SESSIONS:
         SESSIONS.pop(next(iter(SESSIONS)))  # 가장 오래된 대화부터 비운다
     session_id = uuid.uuid4().hex
-    # 첫 말은 정해 둔 한 문장이다. 대화 기록에 넣어 두어, 인도자가 그다음부터 이어 가게 한다
-    SESSIONS[session_id] = {"passage": found, "system": build_system(found), "completed": False,
-                            "messages": [{"role": "user", "content": START_SIGNAL},
-                                         {"role": "assistant", "content": OPENING}]}
-    return {"session_id": session_id, "opening": OPENING, **found}
+    # 첫 말은 인도자가 연다: 화면이 글 없이 /chat을 부르면 시작 신호를 넣고 1단계(시작 기도)부터 인도한다
+    SESSIONS[session_id] = {"passage": found, "system": build_system(found), "completed": False, "messages": []}
+    return {"session_id": session_id, **found}
 
 
 @router.post("/resume")
@@ -295,8 +293,6 @@ def chat(request: ChatRequest):
 
     messages = session["messages"]
     text = (request.message or "").strip()
-    if (not text and not request.resume and len(messages) == 2 and messages[1]["content"] == OPENING):
-        return {"reply": OPENING, "completed": False}   # 첫 말을 청하는 예전 화면에도 같은 첫 말을 준다
     if not messages or (request.expect == 0 and not request.resume and not text):
         text = START_SIGNAL  # 첫 호출: 인도자가 먼저 말을 연다
     elif request.resume:
