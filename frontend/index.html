@@ -520,6 +520,7 @@
   #thread .guide + .guide { margin-top: 0.9rem; }
   #thread .pause { margin: 0.9rem 0; }
   #thread .past { opacity: 0.5; }
+  #thread .past .verse-chips { display: none; }   /* 지난 말의 "📖 2:4 보기"는 치운다. 지금 말이 가리킨 절은 본문에 색으로 보인다 */
   /* 본문이 접혀 있거나, 배경 설명·묵상 정리처럼 글이 길 때: 본문 자리까지 넓어지고 그 안에서 스크롤 */
   #stage.folded #thread { flex: 1 1 auto; height: auto !important; }
 
@@ -528,7 +529,6 @@
                   padding-top: 0.2rem; padding-bottom: 0.2rem; border-top: 1px solid var(--line); }
   #stage .tools { flex-wrap: wrap; row-gap: 0; }          /* 좁은 화면에서 넘치면 둘째 줄로 (잘려 보이지 않게) */
   #stage .tools .tools-end { display: flex; gap: 0.9rem; margin-left: auto; }
-  @media (max-width: 430px) { #see-above .wide { display: none; } }   /* 좁은 휴대폰: "▲" 하나만 */
   #stage .tools button.link { margin: 0; padding: 0.1rem 0; font-size: 0.8125rem; }
 
   /* 2. 펼친 본문: 남는 높이를 모두 갖고 이 구역 안에서만 스크롤. 대화가 길어도 네 줄쯤(5.5rem)은 남긴다. 그만큼 대화 구역이 줄고 그 안에서 민다.
@@ -741,7 +741,6 @@
   <div class="tools">
     <button type="button" id="passage-toggle" class="link" aria-expanded="false">본문</button>
     <span class="tools-end">
-      <button type="button" id="see-above" class="link" aria-label="앞의 말 보기" hidden>▲<span class="wide"> 앞의 말</span></button>
       <button type="button" id="wrap-up" class="link" hidden>마치고 정리하기</button>
       <button type="button" id="stage-home" class="link">달력으로</button>
     </span>
@@ -1129,12 +1128,8 @@ function verseChip(verses) {
    묵상자가 보낸 글과 인도자의 말을 지우지 않고 차례로 쌓는다. 위로 밀면 앞의 대화를 다시 읽는다.
    turn: 지금 주고받는 것의 시작. 방금 보낸 내 글이고, 내 글 없이 온 말(첫 말, 이어서 짚는 말)이면 그 말이다.
    읽을 때(자판이 내려가 있을 때, 컴퓨터): 구역이 turn부터 끝까지, 곧 내 글 + 인도자의 코멘트 + 질문이 다 보이는 높이가 된다.
-   쓸 때(휴대폰 자판이 올라왔을 때): 좁으니 마지막 질문부터 보인다. 그 위는 "▲ 앞의 말"을 보고 밀어 올려 읽는다.
+   쓸 때(휴대폰 자판이 올라왔을 때): 좁으니 마지막 질문부터 보인다. 그 위는 이 구역을 손가락으로 밀어 내려 읽는다.
    남는 높이는 모두 본문이 갖는다. 본문을 접었거나 긴 글(roomy)일 때는 구역이 본문 자리까지 넓어진다 */
-const aboveCue = document.getElementById('see-above');      // 본문 줄의 "▲ 앞의 말": 맨 위 구역 위쪽에 글이 더 있을 때만 보인다
-aboveCue.onclick = () => thread.scrollBy({ top: -Math.max(80, thread.clientHeight * 0.8), behavior: 'smooth' });
-aboveCue.addEventListener('mousedown', (e) => e.preventDefault());   // 눌러도 글 칸에서 커서가 떠나지 않게 (자판이 내려가지 않게)
-thread.addEventListener('scroll', () => { aboveCue.hidden = thread.scrollTop < 4; }, { passive: true });
 
 let turn = null;
 let placed = '';           // 마지막으로 맞춘 자리 (어느 주고받음, 읽기/쓰기). 같으면 묵상자가 민 자리를 건드리지 않는다
@@ -1148,7 +1143,6 @@ function startTurn(node) {
 /* 맨 위 구역을 이것들로 새로 채운다 (첫 말, 묵상 정리). start: 지금 주고받는 것의 시작 (주지 않으면 첫 것) */
 function present(nodes, start = nodes[0]) {
   thread.replaceChildren(...nodes);
-  aboveCue.hidden = true;
   if (start) startTurn(start);
   keepQuestionInView();
 }
@@ -1191,7 +1185,6 @@ function keepQuestionInView() {
   // 주고받음이 바뀌었거나 읽기/쓰기가 바뀔 때만 자리를 맞춘다. 그 밖에는(글 칸이 커지는 등) 묵상자가 밀어 둔 자리를 둔다
   const where = `${turns}:${writing}:${stage.classList.contains('folded')}`;
   if (where !== placed) { placed = where; thread.scrollTop = from; }
-  aboveCue.hidden = thread.scrollTop < 4;
 }
 
 /* 인도자의 말이 길면(배경 설명 등) 본문을 잠시 접고 맨 위 구역을 넓힌다.
