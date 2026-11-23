@@ -3166,7 +3166,9 @@ if (window.visualViewport) {
     if (currentView === 'thread' && (window.scrollY || window.scrollX)) window.scrollTo(0, 0);
     root.style.setProperty('--vv-height', vv.height + 'px');
     root.style.setProperty('--vv-top', Math.max(0, vv.offsetTop) + 'px');
-    root.classList.toggle('keyboard-up', writing() && window.innerHeight - vv.height >= KEYBOARD_AT_LEAST);
+    // 자판의 높이: 아이폰은 전체 화면(innerHeight)과 보이는 영역의 차이, 안드로이드는 innerHeight도 함께 줄어드므로
+    // 자판이 내려가 있을 때의 높이(tallestView)와의 차이로 잰다
+    root.classList.toggle('keyboard-up', writing() && Math.max(window.innerHeight, tallestView) - vv.height >= KEYBOARD_AT_LEAST);
     if (currentView === 'thread') keepQuestionInView();
   };
   // 자판이 오르내리는 동안 값이 여러 번 바뀐다. 그릴 때마다 한 번, 마지막 값으로 맞춘다
