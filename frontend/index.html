@@ -488,7 +488,7 @@
   /* ---- 묵상 화면: 위에서부터 지금 질문, 본문, 글 쓰는 칸, (자판) ----
      판의 높이와 위치는 자판 위로 실제로 보이는 영역(visualViewport)을 따른다 (--vv-height, --vv-top).
      페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다.
-     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(보이는 높이의 절반까지), 남는 높이는 모두 본문.
+     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(본문이 열려 있으면 세 줄, 접혀 있으면 보이는 높이의 절반까지. 넘으면 칸 안에서 스크롤), 남는 높이는 모두 본문.
      줄어드는 것은 본문뿐이다 */
   html.meditating, html.meditating body { overflow: hidden; height: 100%; overscroll-behavior: none; }
   html.meditating main { visibility: hidden; }      /* 묵상 중에는 앱 제목(머리줄)을 숨기고 그 자리를 질문에 쓴다 */
@@ -527,6 +527,8 @@
   /* 2. 펼친 본문: 남는 높이를 모두 갖고 이 구역 안에서만 스크롤. 대화가 길어도 네 줄쯤(5.5rem)은 남긴다. 그만큼 대화 구역이 줄고 그 안에서 민다.
         글씨를 작게, 번호 칸과 여백을 좁혀 한 줄에 글자가 더 들어가게 한다 */
   #passage-panel { flex: 1 1 0; min-height: 5.5rem; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0.25rem; }
+  html.keyboard-up #passage-panel { min-height: 0; }   /* 자판이 올라와 좁을 때는 질문과 글 칸이 먼저다. 본문은 남는 자리만 */
+  html.keyboard-up #passage-toggle .ref { display: none; }   /* 본문 머리줄이 두 줄이 되지 않게 책 이름을 뺀다 */
   #passage-panel .passage { margin: 0; padding: 0.3rem 0.5rem 0.1rem; font-size: 0.8125rem; }
   #passage-panel .verses { column-gap: 0.45rem; row-gap: 0.1rem; margin-bottom: 0.2rem; }
   #passage-panel .verse .number { font-size: 0.6875rem; padding-top: 0.1rem; }
@@ -546,6 +548,9 @@
     font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
     background: transparent; border: 1px solid var(--line); border-radius: 8px;
   }
+  /* 본문이 열려 있을 때(관찰 중): 글 칸은 세 줄까지만 커지고 그 뒤로는 칸 안에서 스크롤한다. 질문과 본문이 계속 보이도록.
+     본문이 접혀 있거나 아직 없을 때(시작 기도, 길게 쓰는 진리·적용·마침 기도에서 본문을 접었을 때): 화면 높이의 절반까지 */
+  #stage:not(.folded) #composer textarea { max-height: calc(3 * 1.6em + 0.8rem + 2px); }
   #composer button[type=submit] { position: absolute; right: 0.3rem; bottom: 0.3rem; margin: 0;
     width: 2rem; height: 2rem; padding: 0; border-radius: 50%; font-size: 1.05rem; line-height: 1; }
   #composer button[type=submit]:disabled { opacity: 0.35; }
@@ -1085,19 +1090,22 @@ let passageWanted = false;
 let observing = false;     // 인도자가 본문 표시나 절 표시를 쓰기 시작했다 = 관찰이 시작되었다
 let roomy = false;
 
-function openPassagePanel(open, pointed = []) {
+let pointedNow = [];      // 인도자의 지금 말이 가리킨 절. 본문을 접었다 다시 펼쳐도 이 절을 칠한다
+function openPassagePanel(open, pointed = pointedNow) {
+  pointedNow = pointed;
   passagePanel.hidden = !open;
   stage.classList.toggle('folded', !open);
   passageToggle.setAttribute('aria-expanded', String(open));
-  passageToggle.textContent = open ? `본문 접기 · ${passage ? passage.reference : ''}` : `본문 펼치기 · ${passage ? passage.reference : ''}`;
+  passageToggle.replaceChildren(open ? '본문 접기' : '본문 펼치기', el('span', 'ref', passage ? ` · ${passage.reference}` : ''));
   if (!open || !passage) return;
   passagePanel.replaceChildren(passageCard(passage.verses, null));
   // 가리킨 절에 색을 칠하고 그 절이 보이도록 펼친 본문 안에서 내려간다 (화면 전체는 움직이지 않는다)
   const rows = pointed.map(v => passagePanel.querySelector(`.verse[data-key="${v.chapter}:${v.start}"]`)).filter(Boolean);
   rows.forEach(r => r.classList.add('hl'));
   if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 8;
+  else passagePanel.scrollTop = 0;     // 가리킨 절이 없으면(본문 전체를 훑어볼 때 등) 첫 절부터
 }
-passageToggle.onclick = () => { passageWanted = passagePanel.hidden; roomy = false; openPassagePanel(passageWanted); keepQuestionInView(); };
+passageToggle.onclick = () => { passageWanted = passagePanel.hidden; roomy = false; openPassagePanel(passageWanted); resizeMessageBox(); };   // 글 칸의 상한도 바뀐다 (열림: 세 줄, 접힘: 절반)
 
 /* 절 표시 [[2:30]]를 글로 옮길 때 쓰는 이름: '2:30', '2:30-31', '2:30-3:2' */
 function verseLabel(verses) {
@@ -1161,11 +1169,11 @@ function keepQuestionInView() {
   if (stage.hidden) return;
   const padTop = parseFloat(getComputedStyle(thread).paddingTop) || 0;
   const writing = document.documentElement.classList.contains('keyboard-up');
-  const from = Math.max(0, (writing ? questionStart() : turnStart()) - padTop);    // 위쪽 여백만큼 남긴다
+  const from = Math.max(0, (writing || wholePassage ? questionStart() : turnStart()) - padTop);    // 위쪽 여백만큼 남긴다
   if (stage.classList.contains('folded')) thread.style.height = '';
   else thread.style.height = Math.ceil(thread.scrollHeight - from) + 'px';
   // 주고받음이 바뀌었거나 읽기/쓰기가 바뀔 때만 자리를 맞춘다. 그 밖에는(글 칸이 커지는 등) 묵상자가 밀어 둔 자리를 둔다
-  const where = `${turns}:${writing}:${stage.classList.contains('folded')}`;
+  const where = `${turns}:${writing || wholePassage}:${stage.classList.contains('folded')}`;
   if (where !== placed) { placed = where; thread.scrollTop = from; }
 }
 
@@ -1182,7 +1190,7 @@ function fitGuide(forceRoomy = false) {
   // 인도자의 마지막 말의 길이만 잰다 (내가 보낸 글과 지난 대화는 세지 않는다). 11월 10일의 기준 그대로
   const guides = thread.querySelectorAll('.guide');
   const content = guides.length ? thread.scrollHeight - guides[guides.length - 1].offsetTop : 0;
-  if (forceRoomy || (!passagePanel.hidden && content > Math.max(tallestView, window.innerHeight) * LONG_SHARE)) {
+  if (forceRoomy || (!wholePassage && !passagePanel.hidden && content > Math.max(tallestView, window.innerHeight) * LONG_SHARE)) {
     roomy = true;
     openPassagePanel(false);
   }
@@ -1196,11 +1204,32 @@ function followGuide(text) {
   const marks = passage ? [...text.matchAll(MARK)].map(m => m[1]) : [];
   const known = marks.map(m => ({ m, verses: markedVerses(m) })).filter(x => x.verses);
   if (!observing && known.length) { observing = true; passageWanted = true; }
-  // 표시한 절과 글로만 말한 절("2:8의 그림", "7절")을 모두 칠한다. 절 단추가 없으니 본문의 색이 가리키는 절을 알려 준다
-  const pointed = [...known.filter(x => !x.m.includes('본문')).flatMap(x => x.verses), ...pointedVerses(text.replace(MARK, ' '))];
+  // 칠할 절: 인도자가 표시한 절([[4:1]])이 있으면 그 절만. "지금 이 절을 보세요"라는 뜻이다.
+  // 설명 속에 지나가며 말한 절("맨 끝 6절에 나오는데")은 표시가 하나도 없을 때만 칠한다
+  let pointed = known.filter(x => !x.m.includes('본문')).flatMap(x => x.verses);
+  if (!pointed.length) pointed = pointedVerses(text.replace(MARK, ' '));
   roomy = false;
+  wholePassage = passage ? asksWholePassage(text, known) : false;
+  if (wholePassage) { passageWanted = true; pointed = []; }   // 본문 전체를 훑어볼 때는 어느 절도 칠하지 않는다 (앞의 코멘트가 가리킨 절이 남지 않게)
   openPassagePanel(passageWanted, [...new Set(pointed)]);
   fitGuide();
+}
+
+/* 인도자가 본문 전체를 훑어보라고 하는가: [[본문]], 또는 "7절부터 18절까지"처럼 본문의 절반 넘게 걸친 범위, 또는 "본문 전체".
+   이때는 본문을 접지 않고, 맨 위 구역은 질문만 두고 남는 자리를 모두 본문에 준다 (되풀이되는 낱말 찾기 같은 관찰) */
+let wholePassage = false;
+function asksWholePassage(text, known) {
+  if (known.some(x => x.m.includes('본문'))) return true;
+  // 범위나 "본문 전체"는 마지막 질문(물음표가 있는 마지막 문단)에서만 본다.
+  // 배경 설명 속 "4장 1절부터 6절까지는…" 같은 소개는 훑어보라는 말이 아니다
+  const paragraphs = text.replace(MARK, ' ').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  const ask = [...paragraphs].reverse().find(p => /[?？]/.test(p)) || paragraphs[paragraphs.length - 1] || '';
+  if (/본문\s*전체|처음부터\s*끝까지/.test(ask)) return true;
+  const half = passage.verses.length / 2;
+  return [...ask.matchAll(RANGE_TALK)].some(m => {
+    const [from, to] = [...m[0].matchAll(/(\d{1,3})\s*절/g)].map(n => Number(n[1]));   // "7절부터 18절까지" → 7, 18
+    return passage.verses.filter(v => from <= v.start && v.end <= to).length > half;
+  });
 }
 
 /* 이어서 하기: 지난 대화에 본문 표시가 있었으면 관찰을 이미 시작한 것이다 */
@@ -1767,7 +1796,8 @@ async function beginMeditation(ref, mode) {
   draft = { date: todayKey, ref: data.passage, mode, messages: [] };
   askedToWrapUp = false;
   sentCount = 0;
-  observing = passageWanted = roomy = false;
+  observing = passageWanted = roomy = wholePassage = false;
+  pointedNow = [];
   wrapUpLink.hidden = true;
   present([]);
   messageBox.value = '';
@@ -2966,7 +2996,7 @@ function resizeMessageBox() {
   const atEnd = messageBox.selectionEnd === messageBox.value.length;
   messageBox.style.height = 'auto';
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
-  // 글 칸이 상한(보이는 높이의 절반)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
+  // 글 칸이 상한(본문이 열려 있으면 세 줄, 접혀 있으면 보이는 높이의 절반)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
   if (atEnd) messageBox.scrollTop = messageBox.scrollHeight;
   else caretIntoView();
   sendButton.disabled = busy || !messageBox.value.trim();
@@ -3143,7 +3173,9 @@ if (window.visualViewport) {
     if (currentView === 'thread' && (window.scrollY || window.scrollX)) window.scrollTo(0, 0);
     root.style.setProperty('--vv-height', vv.height + 'px');
     root.style.setProperty('--vv-top', Math.max(0, vv.offsetTop) + 'px');
-    root.classList.toggle('keyboard-up', writing() && window.innerHeight - vv.height >= KEYBOARD_AT_LEAST);
+    // 자판의 높이: 아이폰은 전체 화면(innerHeight)과 보이는 영역의 차이, 안드로이드는 innerHeight도 함께 줄어드므로
+    // 자판이 내려가 있을 때의 높이(tallestView)와의 차이로 잰다
+    root.classList.toggle('keyboard-up', writing() && Math.max(window.innerHeight, tallestView) - vv.height >= KEYBOARD_AT_LEAST);
     if (currentView === 'thread') keepQuestionInView();
   };
   // 자판이 오르내리는 동안 값이 여러 번 바뀐다. 그릴 때마다 한 번, 마지막 값으로 맞춘다
