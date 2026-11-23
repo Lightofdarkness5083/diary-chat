@@ -1210,7 +1210,7 @@ function followGuide(text) {
   if (!pointed.length) pointed = pointedVerses(text.replace(MARK, ' '));
   roomy = false;
   wholePassage = passage ? asksWholePassage(text, known) : false;
-  if (wholePassage) passageWanted = true;
+  if (wholePassage) { passageWanted = true; pointed = []; }   // 본문 전체를 훑어볼 때는 어느 절도 칠하지 않는다 (앞의 코멘트가 가리킨 절이 남지 않게)
   openPassagePanel(passageWanted, [...new Set(pointed)]);
   fitGuide();
 }
