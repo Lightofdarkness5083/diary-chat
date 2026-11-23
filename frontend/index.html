@@ -529,6 +529,9 @@
   #passage-panel { flex: 1 1 0; min-height: 5.5rem; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0.25rem; }
   html.keyboard-up #passage-panel { min-height: 0; }   /* 자판이 올라와 좁을 때는 질문과 글 칸이 먼저다. 본문은 남는 자리만 */
   html.keyboard-up #passage-toggle .ref { display: none; }   /* 본문 머리줄이 두 줄이 되지 않게 책 이름을 뺀다 */
+  /* 자판이 올라와 있을 때 글 칸은 세 줄까지만 커지고, 그 뒤로는 칸 안에서 스크롤한다 (지금 쓰는 줄이 보이게).
+     질문과 본문(노란색 절)이 계속 보이도록 */
+  html.keyboard-up #composer textarea { max-height: calc(3 * 1.6em + 0.8rem + 2px); }
   #passage-panel .passage { margin: 0; padding: 0.3rem 0.5rem 0.1rem; font-size: 0.8125rem; }
   #passage-panel .verses { column-gap: 0.45rem; row-gap: 0.1rem; margin-bottom: 0.2rem; }
   #passage-panel .verse .number { font-size: 0.6875rem; padding-top: 0.1rem; }
