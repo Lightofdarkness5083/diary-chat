@@ -488,7 +488,7 @@
   /* ---- 묵상 화면: 위에서부터 지금 질문, 본문, 글 쓰는 칸, (자판) ----
      판의 높이와 위치는 자판 위로 실제로 보이는 영역(visualViewport)을 따른다 (--vv-height, --vv-top).
      페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다.
-     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(세 줄까지, 넘으면 칸 안에서 스크롤), 남는 높이는 모두 본문.
+     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(본문이 열려 있으면 세 줄, 접혀 있으면 보이는 높이의 절반까지. 넘으면 칸 안에서 스크롤), 남는 높이는 모두 본문.
      줄어드는 것은 본문뿐이다 */
   html.meditating, html.meditating body { overflow: hidden; height: 100%; overscroll-behavior: none; }
   html.meditating main { visibility: hidden; }      /* 묵상 중에는 앱 제목(머리줄)을 숨기고 그 자리를 질문에 쓴다 */
@@ -544,10 +544,13 @@
   #composer .row { position: relative; display: block; }
   #composer textarea {
     display: block; width: 100%; resize: none; padding: 0.4rem 2.6rem 0.4rem 0.7rem;
-    max-height: calc(3 * 1.6em + 0.8rem + 2px);   /* 세 줄까지만 커지고, 그 뒤로는 칸 안에서 스크롤한다 (지금 쓰는 줄이 보이게). 질문과 본문이 계속 보이도록 */
+    max-height: calc(var(--vv-height, 100dvh) * 0.5);
     font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
     background: transparent; border: 1px solid var(--line); border-radius: 8px;
   }
+  /* 본문이 열려 있을 때(관찰 중): 글 칸은 세 줄까지만 커지고 그 뒤로는 칸 안에서 스크롤한다. 질문과 본문이 계속 보이도록.
+     본문이 접혀 있거나 아직 없을 때(시작 기도, 길게 쓰는 진리·적용·마침 기도에서 본문을 접었을 때): 화면 높이의 절반까지 */
+  #stage:not(.folded) #composer textarea { max-height: calc(3 * 1.6em + 0.8rem + 2px); }
   #composer button[type=submit] { position: absolute; right: 0.3rem; bottom: 0.3rem; margin: 0;
     width: 2rem; height: 2rem; padding: 0; border-radius: 50%; font-size: 1.05rem; line-height: 1; }
   #composer button[type=submit]:disabled { opacity: 0.35; }
@@ -1102,7 +1105,7 @@ function openPassagePanel(open, pointed = pointedNow) {
   if (rows.length) passagePanel.scrollTop += rows[0].firstChild.getBoundingClientRect().top - passagePanel.getBoundingClientRect().top - 8;
   else passagePanel.scrollTop = 0;     // 가리킨 절이 없으면(본문 전체를 훑어볼 때 등) 첫 절부터
 }
-passageToggle.onclick = () => { passageWanted = passagePanel.hidden; roomy = false; openPassagePanel(passageWanted); keepQuestionInView(); };
+passageToggle.onclick = () => { passageWanted = passagePanel.hidden; roomy = false; openPassagePanel(passageWanted); resizeMessageBox(); };   // 글 칸의 상한도 바뀐다 (열림: 세 줄, 접힘: 절반)
 
 /* 절 표시 [[2:30]]를 글로 옮길 때 쓰는 이름: '2:30', '2:30-31', '2:30-3:2' */
 function verseLabel(verses) {
@@ -2988,7 +2991,7 @@ function resizeMessageBox() {
   const atEnd = messageBox.selectionEnd === messageBox.value.length;
   messageBox.style.height = 'auto';
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
-  // 글 칸이 상한(세 줄)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
+  // 글 칸이 상한(본문이 열려 있으면 세 줄, 접혀 있으면 보이는 높이의 절반)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
   if (atEnd) messageBox.scrollTop = messageBox.scrollHeight;
   else caretIntoView();
   sendButton.disabled = busy || !messageBox.value.trim();
