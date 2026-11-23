@@ -488,7 +488,7 @@
   /* ---- 묵상 화면: 위에서부터 지금 질문, 본문, 글 쓰는 칸, (자판) ----
      판의 높이와 위치는 자판 위로 실제로 보이는 영역(visualViewport)을 따른다 (--vv-height, --vv-top).
      페이지 전체는 스크롤되지 않는다. 움직이는 것은 본문 구역(과 질문이 길 때의 질문 구역)뿐이다.
-     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(보이는 높이의 절반까지), 남는 높이는 모두 본문.
+     높이 나누기: 질문은 질문이 다 보이는 만큼, 글 쓰는 칸은 쓴 줄 수만큼(세 줄까지, 넘으면 칸 안에서 스크롤), 남는 높이는 모두 본문.
      줄어드는 것은 본문뿐이다 */
   html.meditating, html.meditating body { overflow: hidden; height: 100%; overscroll-behavior: none; }
   html.meditating main { visibility: hidden; }      /* 묵상 중에는 앱 제목(머리줄)을 숨기고 그 자리를 질문에 쓴다 */
@@ -529,9 +529,6 @@
   #passage-panel { flex: 1 1 0; min-height: 5.5rem; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0.25rem; }
   html.keyboard-up #passage-panel { min-height: 0; }   /* 자판이 올라와 좁을 때는 질문과 글 칸이 먼저다. 본문은 남는 자리만 */
   html.keyboard-up #passage-toggle .ref { display: none; }   /* 본문 머리줄이 두 줄이 되지 않게 책 이름을 뺀다 */
-  /* 자판이 올라와 있을 때 글 칸은 세 줄까지만 커지고, 그 뒤로는 칸 안에서 스크롤한다 (지금 쓰는 줄이 보이게).
-     질문과 본문(노란색 절)이 계속 보이도록 */
-  html.keyboard-up #composer textarea { max-height: calc(3 * 1.6em + 0.8rem + 2px); }
   #passage-panel .passage { margin: 0; padding: 0.3rem 0.5rem 0.1rem; font-size: 0.8125rem; }
   #passage-panel .verses { column-gap: 0.45rem; row-gap: 0.1rem; margin-bottom: 0.2rem; }
   #passage-panel .verse .number { font-size: 0.6875rem; padding-top: 0.1rem; }
@@ -547,7 +544,7 @@
   #composer .row { position: relative; display: block; }
   #composer textarea {
     display: block; width: 100%; resize: none; padding: 0.4rem 2.6rem 0.4rem 0.7rem;
-    max-height: calc(var(--vv-height, 100dvh) * 0.5);
+    max-height: calc(3 * 1.6em + 0.8rem + 2px);   /* 세 줄까지만 커지고, 그 뒤로는 칸 안에서 스크롤한다 (지금 쓰는 줄이 보이게). 질문과 본문이 계속 보이도록 */
     font-family: var(--serif); font-size: inherit; line-height: 1.6; color: var(--pen);
     background: transparent; border: 1px solid var(--line); border-radius: 8px;
   }
@@ -2991,7 +2988,7 @@ function resizeMessageBox() {
   const atEnd = messageBox.selectionEnd === messageBox.value.length;
   messageBox.style.height = 'auto';
   messageBox.style.height = messageBox.scrollHeight + 2 + 'px';
-  // 글 칸이 상한(보이는 높이의 절반)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
+  // 글 칸이 상한(세 줄)에 닿으면 칸 안에서 스크롤한다. 지금 타이프하는 줄이 늘 보이게
   if (atEnd) messageBox.scrollTop = messageBox.scrollHeight;
   else caretIntoView();
   sendButton.disabled = busy || !messageBox.value.trim();
